@@ -3,7 +3,7 @@ const CONTROLLER_RES = [/@RestController\b/, /@Controller\b/];
 export function checkTransactions(fileContexts) {
   const findings = [];
 
-  for (const { filePath, lines, fileName } of fileContexts) {
+  for (const { filePath, lines, relativePath } of fileContexts) {
     if (!filePath.endsWith('.java')) continue;
 
     const content = lines.join('\n');
@@ -21,7 +21,7 @@ export function checkTransactions(fileContexts) {
           severity: 'major',
           rule: 'transactions',
           message: '@Transactional on Controller method (move to Service layer)',
-          location: `${fileName}:${i + 1}`,
+          location: `${relativePath}:${i + 1}`,
         });
       }
 
@@ -33,7 +33,7 @@ export function checkTransactions(fileContexts) {
           severity: 'critical',
           rule: 'transactions',
           message: '@Transactional + @Async — transaction will NOT propagate to async thread',
-          location: `${fileName}:${i + 1}`,
+          location: `${relativePath}:${i + 1}`,
         });
       }
     }

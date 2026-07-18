@@ -17,7 +17,7 @@ The CLI uses lightweight, regular-expression-based and context-heuristic static 
    ```javascript
    export function checkYourRule(fileContexts) {
      const findings = [];
-     for (const { filePath, lines, fileName } of fileContexts) {
+     for (const { filePath, lines, relativePath } of fileContexts) {
        if (!filePath.endsWith('.java')) continue;
        
        // Scan the lines, skipping comments and string literals
@@ -32,7 +32,7 @@ The CLI uses lightweight, regular-expression-based and context-heuristic static 
              severity: 'critical', // 'critical', 'major', or 'warning'
              rule: 'your-rule-name',
              message: 'Explanation of why this is a production anti-pattern',
-             location: `${fileName}:${i + 1}`,
+             location: `${relativePath}:${i + 1}`,
            });
          }
        }
@@ -40,6 +40,17 @@ The CLI uses lightweight, regular-expression-based and context-heuristic static 
      return deduplicate(findings);
    }
    ```
+   Use `relativePath`, not `fileName` — `fileName` is only the basename, so two files with
+   the same name in different directories (e.g. `module-a/OrderService.java` and
+   `module-b/OrderService.java`) would produce identical `location` strings, and
+   `deduplicate()` (keyed on `` `${location}|${message}` ``) would silently drop one of
+   the two real findings.
+
+   **Exception — file-level findings**: if your check applies to a whole file with no
+   single line to anchor to (e.g. "config file missing setting X"), omit `:${i + 1}` and
+   use `location: relativePath` alone. This mirrors SARIF's own distinction between
+   region-level and artifact-level results (see `cli/src/rules/kafka.js`, the
+   "Kafka config without consumer group.id" check, for a working example).
 3. **Register the rule**: Import and add your function to the `RULES` array inside [cli/src/scanner.js](file:///home/usuariojoaquin/java-vibe-guard/cli/src/scanner.js).
 
 ### 2. Implementing in the MCP Server (`mcp-server/`)

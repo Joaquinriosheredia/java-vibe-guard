@@ -20,7 +20,7 @@ const BLOCKING_PATTERNS = [
 export function checkBlocking(fileContexts) {
   const findings = [];
 
-  for (const { filePath, lines, fileName } of fileContexts) {
+  for (const { filePath, lines, relativePath } of fileContexts) {
     if (!filePath.endsWith('.java')) continue;
 
     // Collect positions of async annotations
@@ -49,7 +49,7 @@ export function checkBlocking(fileContexts) {
               severity: 'critical',
               rule: annotationName === '@KafkaListener' ? 'blocking-kafka' : 'blocking',
               message: `${name} detected in ${annotationName} method`,
-              location: `${fileName}:${i + 1}`,
+              location: `${relativePath}:${i + 1}`,
             });
           }
         }

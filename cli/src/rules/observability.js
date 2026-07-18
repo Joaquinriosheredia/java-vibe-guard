@@ -18,7 +18,7 @@ const LOG_RES = [
 export function checkObservability(fileContexts) {
   const findings = [];
 
-  for (const { filePath, lines, fileName } of fileContexts) {
+  for (const { filePath, lines, relativePath } of fileContexts) {
     if (!filePath.endsWith('.java')) continue;
 
     const content = lines.join('\n');
@@ -54,7 +54,7 @@ export function checkObservability(fileContexts) {
           severity: 'warning',
           rule: 'observability',
           message: 'Endpoint without structured logging',
-          location: `${fileName}:${i + 1}`,
+          location: `${relativePath}:${i + 1}`,
         });
       }
     }

@@ -211,6 +211,29 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
   assert(json.issues.length === 0, 'TransactionsFalsePositive.java produces 0 findings');
 }
 
+// ─── Test 6: same-filename collision across nested directories ───────────────
+// test-fixtures/nested/module-a/OrderService.java and .../module-b/OrderService.java
+// share a basename and trigger the same rule on the same line number. Scanned
+// together (not via runOnFixture — both files must coexist in one scan) so their
+// locations can only be told apart if location carries the directory path, not
+// just the basename. Before the fileName -> relativePath fix, both findings
+// resolved to the identical location "OrderService.java:7" and deduplicate()
+// (keyed on `${location}|${message}`) silently dropped one of the two real
+// findings — not just an ambiguous label, an actual missed detection.
+console.log('\n📋 Test 6: nested directories with colliding basenames');
+{
+  const { stdout } = run(['--json', '--rule', 'transactions', FIXTURES]);
+  const json = JSON.parse(stdout);
+  const orderServiceIssues = json.issues.filter(i => i.location.includes('OrderService.java'));
+
+  assert(orderServiceIssues.length === 2, 'both nested OrderService.java findings survive dedup (got ' + orderServiceIssues.length + ')');
+
+  const locations = orderServiceIssues.map(i => i.location);
+  assert(locations.includes('nested/module-a/OrderService.java:7'), 'module-a finding location includes its directory');
+  assert(locations.includes('nested/module-b/OrderService.java:7'), 'module-b finding location includes its directory');
+  assert(new Set(locations).size === locations.length, 'nested findings have distinct locations (no collision)');
+}
+
 // ─── Summary ─────────────────────────────────────────────────────────────────
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`📊 Results: ${passed} passed, ${failed} failed`);

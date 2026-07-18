@@ -8,7 +8,7 @@ const ZOOKEEPER_IMAGE_RES = [
 export function checkKafka(fileContexts) {
   const findings = [];
 
-  for (const { filePath, lines, fileName } of fileContexts) {
+  for (const { filePath, lines, relativePath } of fileContexts) {
     // --- YAML: Zookeeper detection ---
     if (filePath.endsWith('.yml') || filePath.endsWith('.yaml')) {
       for (let i = 0; i < lines.length; i++) {
@@ -20,7 +20,7 @@ export function checkKafka(fileContexts) {
               severity: 'warning',
               rule: 'kafka',
               message: 'Kafka using Zookeeper (deprecated in Kafka 3.x — migrate to KRaft)',
-              location: `${fileName}:${i + 1}`,
+              location: `${relativePath}:${i + 1}`,
             });
             break;
           }
@@ -49,7 +49,7 @@ export function checkKafka(fileContexts) {
           severity: 'warning',
           rule: 'kafka',
           message: '@KafkaListener without explicit groupId',
-          location: `${fileName}:${i + 1}`,
+          location: `${relativePath}:${i + 1}`,
         });
       }
 
@@ -60,14 +60,14 @@ export function checkKafka(fileContexts) {
           severity: 'warning',
           rule: 'kafka',
           message: '@KafkaListener without @RetryableTopic or DLQ — failed messages will be lost',
-          location: `${fileName}:${i + 1}`,
+          location: `${relativePath}:${i + 1}`,
         });
       }
     }
   }
 
   // --- Properties/yml: Kafka config without group.id ---
-  for (const { filePath, lines, fileName } of fileContexts) {
+  for (const { filePath, lines, relativePath } of fileContexts) {
     if (!filePath.endsWith('.properties') && !filePath.endsWith('.yml') && !filePath.endsWith('.yaml')) continue;
     const content = lines.join('\n');
     if (
@@ -78,7 +78,12 @@ export function checkKafka(fileContexts) {
         severity: 'warning',
         rule: 'kafka',
         message: 'Kafka config without consumer group.id',
-        location: fileName,
+        // File-level finding, not line-level: this check inspects the whole
+        // config file for the presence of settings, with no single line to
+        // anchor to. location intentionally omits ":line" — SARIF itself
+        // distinguishes region-level vs artifact-level results, so this
+        // split is semantically correct and reusable when SARIF output lands.
+        location: relativePath,
       });
     }
   }
