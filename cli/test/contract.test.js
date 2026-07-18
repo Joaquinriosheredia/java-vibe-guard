@@ -8,7 +8,7 @@
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { mkdtempSync, copyFileSync, rmSync } from 'fs';
+import { mkdtempSync, copyFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { applySuppressions } from '../src/suppression.js';
 
@@ -47,6 +47,33 @@ function runOnFixture(fixtureFileName, rule) {
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+// Writes a single .java file into its own temp dir and runs the real CLI
+// against it (spawnSync, not applySuppressions directly) — exercises the
+// full pipeline: rule detection → applySuppressions → reporter filtering →
+// exit code, exactly as CI would invoke it.
+function runOnSource(javaSource, args) {
+  const dir = mkdtempSync(join(tmpdir(), 'vibe-guard-suppression-'));
+  try {
+    writeFileSync(join(dir, 'Svc.java'), javaSource);
+    return run([...args, dir]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const SUPPRESSED_CRITICAL_SOURCE = `package com.example;
+
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.scheduling.annotation.Async;
+
+public class Svc {
+    @Transactional // vibe-guard: ignore transactions -- legacy migration, tracked in JIRA-1234
+    @Async
+    public void saveAndSend() {
+    }
+}
+`;
 
 // ─── Test 1: JSON schema shape ───────────────────────────────────────────────
 console.log('\n📋 Test 1: JSON output schema');
@@ -342,6 +369,89 @@ console.log('\n📋 Test 10: file-level findings without a line number are never
 
   assert(output[0].suppressed === false, 'file-level finding with no line to resolve against is not suppressed');
   assert(output[0].suppressedBy === null, 'suppressedBy is null for file-level findings');
+}
+
+// ─── Test 11: a real suppressed finding disappears from normal output ──────
+// End-to-end: the fixture has one real @Transactional+@Async critical finding
+// with an inline directive covering it. Neither JSON nor text output should
+// show it, but the summary must still count it as suppressed.
+console.log('\n📋 Test 11: suppressed finding disappears from normal output (JSON)');
+{
+  const { stdout, exitCode } = runOnSource(SUPPRESSED_CRITICAL_SOURCE, ['--json']);
+  const json = JSON.parse(stdout);
+
+  assert(json.issues.length === 0, 'suppressed finding does not appear in issues[]');
+  assert(json.summary.critical === 0, 'summary.critical is 0 (suppressed finding excluded from severity counts)');
+  assert(json.summary.reported === 0, 'summary.reported is 0');
+  assert(json.summary.suppressed === 1, 'summary.suppressed is 1');
+  assert(json.summary.total === 1, 'summary.total is 1');
+  assert(json.healthy === true, 'healthy is true (no visible critical findings)');
+  assert(exitCode === 0, 'exit code is 0 — a suppressed critical does not fail the process');
+}
+
+console.log('\n📋 Test 11b: suppressed finding disappears from normal output (text)');
+{
+  const { stdout } = runOnSource(SUPPRESSED_CRITICAL_SOURCE, []);
+  assert(!stdout.includes('@Transactional + @Async'), 'suppressed finding message does not appear in human-readable output');
+  assert(stdout.includes('1 suppressed'), 'summary line mentions 1 suppressed');
+  assert(stdout.includes('Production-ready'), 'summary reports production-ready (no visible critical/major/warning)');
+}
+
+// ─── Test 12: a suppressed critical does not fail the process ──────────────
+console.log('\n📋 Test 12: suppressed critical does not cause exit code 1');
+{
+  const { exitCode } = runOnSource(SUPPRESSED_CRITICAL_SOURCE, []);
+  assert(exitCode === 0, 'process exits 0 when the only critical finding is suppressed');
+}
+
+// ─── Test 13: --verbose shows the suppressed finding with its justification ─
+console.log('\n📋 Test 13: --verbose lists suppressed findings');
+{
+  const { stdout: jsonOut } = runOnSource(SUPPRESSED_CRITICAL_SOURCE, ['--json', '--verbose']);
+  const json = JSON.parse(jsonOut);
+  assert(Array.isArray(json.suppressedIssues), '--json --verbose adds a suppressedIssues array');
+  assert(json.suppressedIssues.length === 1, 'suppressedIssues has exactly 1 entry');
+  if (json.suppressedIssues.length === 1) {
+    const s = json.suppressedIssues[0];
+    assert(s.ruleId === 'transactions', 'suppressed issue has ruleId "transactions"');
+    assert(s.suppressedBy === 'inline', 'suppressed issue has suppressedBy "inline"');
+    assert(s.justification === 'legacy migration, tracked in JIRA-1234', 'suppressed issue has the correct justification');
+  }
+
+  const { stdout: textOut } = runOnSource(SUPPRESSED_CRITICAL_SOURCE, ['--verbose']);
+  assert(textOut.includes('SUPPRESSED'), '--verbose text output includes a SUPPRESSED block');
+  assert(textOut.includes('legacy migration, tracked in JIRA-1234'), '--verbose text output includes the justification');
+
+  const { stdout: nonVerboseOut } = runOnSource(SUPPRESSED_CRITICAL_SOURCE, []);
+  assert(!nonVerboseOut.includes('SUPPRESSED'), 'without --verbose, no SUPPRESSED block is printed');
+}
+
+// ─── Test 14: zero regression when no suppression directives are present ───
+// Same fixture, same finding, but no inline directive — this must behave
+// exactly like the pre-suppression-filtering CLI: finding reported, critical
+// counted, exit code 1.
+console.log('\n📋 Test 14: zero regression when nothing is suppressed');
+{
+  const unsuppressedSource = SUPPRESSED_CRITICAL_SOURCE.replace(
+    ' // vibe-guard: ignore transactions -- legacy migration, tracked in JIRA-1234',
+    ''
+  );
+  const { stdout, exitCode } = runOnSource(unsuppressedSource, ['--json']);
+  const json = JSON.parse(stdout);
+
+  assert(json.issues.length === 1, 'unsuppressed finding still appears in issues[]');
+  assert(json.summary.critical === 1, 'summary.critical is 1');
+  assert(json.summary.reported === 1, 'summary.reported equals total findings');
+  assert(json.summary.suppressed === 0, 'summary.suppressed is 0');
+  assert(json.summary.total === 1, 'summary.total is 1');
+  assert(json.healthy === false, 'healthy is false');
+  assert(exitCode === 1, 'exit code is 1 — an unsuppressed critical still fails the process, unchanged from before');
+
+  // Also confirm the full test-fixtures/ project (no suppression comments in
+  // any committed fixture) produces suppressed: 0 and reported === total.
+  const fullRun = JSON.parse(run(['--json', FIXTURES]).stdout);
+  assert(fullRun.summary.suppressed === 0, 'test-fixtures/ (no suppression comments) has summary.suppressed === 0');
+  assert(fullRun.summary.reported === fullRun.summary.total, 'test-fixtures/ has reported === total when nothing is suppressed');
 }
 
 // ─── Summary ─────────────────────────────────────────────────────────────────

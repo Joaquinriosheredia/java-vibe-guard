@@ -45,27 +45,53 @@ export function printHeader(projectPath, fileCount) {
   console.log(chalk.gray(`Scanning: ${projectPath}  (${fileCount} files)\n`));
 }
 
-export function printFindings(findings) {
-  if (findings.length === 0) {
+function formatSuppressedBlock(f) {
+  const reason = f.justification ? `${f.suppressedBy} — ${f.justification}` : f.suppressedBy;
+  return [
+    chalk.gray('  SUPPRESSED'),
+    chalk.gray(`  ${f.rule}`),
+    chalk.gray(`  ${f.location}`),
+    chalk.gray(`  Reason: ${reason}`),
+  ].join('\n');
+}
+
+export function printFindings(findings, { verbose = false } = {}) {
+  const visibleFindings = findings.filter(f => !f.suppressed);
+
+  if (visibleFindings.length === 0) {
     console.log(chalk.bold.green('✅ No vibe coding patterns detected. Looks production-ready!'));
-    return;
+  } else {
+    const sorted = [...visibleFindings].sort(
+      (a, b) => (SEVERITY_ORDER[a.severity] ?? 4) - (SEVERITY_ORDER[b.severity] ?? 4)
+    );
+    for (const f of sorted) {
+      const icon = SEVERITY_ICON[f.severity] ?? 'ℹ️ ';
+      console.log(`${icon} ${label(f.severity)}: ${f.message} → ${chalk.cyan(f.location)}`);
+      if (f.severity === 'critical') {
+        const evidence = formatEvidence(f.rule);
+        if (evidence) console.log(evidence);
+      }
+    }
   }
-  const sorted = [...findings].sort(
-    (a, b) => (SEVERITY_ORDER[a.severity] ?? 4) - (SEVERITY_ORDER[b.severity] ?? 4)
-  );
-  for (const f of sorted) {
-    const icon = SEVERITY_ICON[f.severity] ?? 'ℹ️ ';
-    console.log(`${icon} ${label(f.severity)}: ${f.message} → ${chalk.cyan(f.location)}`);
-    if (f.severity === 'critical') {
-      const evidence = formatEvidence(f.rule);
-      if (evidence) console.log(evidence);
+
+  if (verbose) {
+    const suppressedFindings = findings.filter(f => f.suppressed);
+    if (suppressedFindings.length > 0) {
+      console.log('');
+      console.log(chalk.gray(`── ${suppressedFindings.length} suppressed finding(s) ──`));
+      for (const f of suppressedFindings) {
+        console.log(formatSuppressedBlock(f));
+      }
     }
   }
 }
 
 export function printSummary(findings) {
+  const visibleFindings = findings.filter(f => !f.suppressed);
+  const suppressedCount = findings.length - visibleFindings.length;
+
   const c = { critical: 0, major: 0, warning: 0, info: 0 };
-  for (const f of findings) c[f.severity] = (c[f.severity] || 0) + 1;
+  for (const f of visibleFindings) c[f.severity] = (c[f.severity] || 0) + 1;
 
   console.log('');
   console.log(chalk.gray('─'.repeat(62)));
@@ -78,6 +104,9 @@ export function printSummary(findings) {
   if (!parts.length)  parts.push(chalk.green('0 issues'));
 
   console.log(`📊 Summary: ${parts.join(' · ')}`);
+  if (suppressedCount > 0) {
+    console.log(chalk.gray(`   ${visibleFindings.length} reported · ${suppressedCount} suppressed · ${findings.length} total`));
+  }
   console.log(chalk.gray('─'.repeat(62)));
   console.log('');
 
@@ -91,20 +120,40 @@ export function printSummary(findings) {
   console.log('');
 }
 
-export function printJSON(findings, projectPath, fileCount) {
+export function printJSON(findings, projectPath, fileCount, { verbose = false } = {}) {
+  const visibleFindings = findings.filter(f => !f.suppressed);
+  const suppressedFindings = findings.filter(f => f.suppressed);
+
   const c = { critical: 0, major: 0, warning: 0, info: 0 };
-  for (const f of findings) c[f.severity] = (c[f.severity] || 0) + 1;
-  console.log(JSON.stringify({
+  for (const f of visibleFindings) c[f.severity] = (c[f.severity] || 0) + 1;
+
+  const output = {
     timestamp: new Date().toISOString(),
     projectPath,
     filesScanned: fileCount,
-    summary: c,
+    summary: {
+      ...c,
+      reported: visibleFindings.length,
+      suppressed: suppressedFindings.length,
+      total: findings.length,
+    },
     healthy: c.critical === 0,
-    issues: findings.map(f => ({
+    issues: visibleFindings.map(f => ({
       severity: f.severity,
       ruleId: f.rule,
       message: f.message,
       location: f.location,
     })),
-  }, null, 2));
+  };
+
+  if (verbose) {
+    output.suppressedIssues = suppressedFindings.map(f => ({
+      ruleId: f.rule,
+      location: f.location,
+      suppressedBy: f.suppressedBy,
+      justification: f.justification,
+    }));
+  }
+
+  console.log(JSON.stringify(output, null, 2));
 }

@@ -84,14 +84,17 @@ export async function runGuard(projectPath, opts = {}) {
 
   const config = {};
   const findings = applySuppressions(allFindings, fileContexts, config);
+  const visibleFindings = findings.filter(f => !f.suppressed);
 
   if (opts.json) {
-    printJSON(findings, projectPath, files.length);
+    printJSON(findings, projectPath, files.length, { verbose: opts.verbose });
   } else {
     printHeader(projectPath, files.length);
-    printFindings(findings);
+    printFindings(findings, { verbose: opts.verbose });
     printSummary(findings);
   }
 
-  return findings.some(f => f.severity === 'critical') ? 1 : 0;
+  // A suppressed finding was reviewed and accepted by the user — it must not
+  // keep blocking CI. Only findings that are still visible can fail the build.
+  return visibleFindings.some(f => f.severity === 'critical') ? 1 : 0;
 }

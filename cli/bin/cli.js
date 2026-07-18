@@ -18,6 +18,7 @@ program
   .option('--json', 'Output results as JSON')
   .option('--rule <name>', 'Run only one rule: blocking | layers | kafka | transactions | observability')
   .option('--ignore <dirs>', 'Comma-separated directories to exclude (e.g. labs,demos,test)')
+  .option('--verbose', 'List suppressed findings with their rule, location, suppressedBy, and justification')
   .option('--no-color', 'Disable colored output')
   .parse();
 
