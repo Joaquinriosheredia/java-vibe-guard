@@ -6,6 +6,7 @@ import { checkKafka } from './rules/kafka.js';
 import { checkTransactions } from './rules/transactions.js';
 import { checkObservability } from './rules/observability.js';
 import { printHeader, printFindings, printSummary, printJSON } from './reporter.js';
+import { applySuppressions } from './suppression.js';
 
 const RULES = [
   { id: 'blocking',      fn: checkBlocking },
@@ -81,13 +82,16 @@ export async function runGuard(projectPath, opts = {}) {
     }
   }
 
+  const config = {};
+  const findings = applySuppressions(allFindings, fileContexts, config);
+
   if (opts.json) {
-    printJSON(allFindings, projectPath, files.length);
+    printJSON(findings, projectPath, files.length);
   } else {
     printHeader(projectPath, files.length);
-    printFindings(allFindings);
-    printSummary(allFindings);
+    printFindings(findings);
+    printSummary(findings);
   }
 
-  return allFindings.some(f => f.severity === 'critical') ? 1 : 0;
+  return findings.some(f => f.severity === 'critical') ? 1 : 0;
 }

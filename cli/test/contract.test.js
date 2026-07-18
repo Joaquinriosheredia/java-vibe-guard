@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { mkdtempSync, copyFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
+import { applySuppressions } from '../src/suppression.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI = join(__dirname, '../bin/cli.js');
@@ -232,6 +233,34 @@ console.log('\n📋 Test 6: nested directories with colliding basenames');
   assert(locations.includes('nested/module-a/OrderService.java:7'), 'module-a finding location includes its directory');
   assert(locations.includes('nested/module-b/OrderService.java:7'), 'module-b finding location includes its directory');
   assert(new Set(locations).size === locations.length, 'nested findings have distinct locations (no collision)');
+}
+
+// ─── Test 7: applySuppressions pass-through contract ─────────────────────────
+// Step 1 of the SuppressionEngine work: applySuppressions is a pure pass-through
+// today (no inline-comment parsing, no config), so this only asserts the shape
+// contract — same length, suppressed:false added, every other field untouched.
+console.log('\n📋 Test 7: applySuppressions pass-through');
+{
+  const input = [
+    { severity: 'critical', rule: 'transactions', message: 'a', location: 'A.java:1' },
+    { severity: 'warning',  rule: 'kafka',        message: 'b', location: 'B.java:2' },
+  ];
+  const output = applySuppressions(input, [], {});
+
+  assert(output.length === input.length, 'output has the same number of findings as input');
+  assert(output.every(f => f.suppressed === false), 'every finding has suppressed: false');
+  assert(
+    output.every((f, i) => {
+      const { suppressed, ...rest } = f;
+      return Object.keys(rest).every(k => rest[k] === input[i][k])
+        && Object.keys(input[i]).every(k => input[i][k] === rest[k]);
+    }),
+    'all other fields are unchanged'
+  );
+  assert(
+    input.every(f => !('suppressed' in f)),
+    'original input findings are not mutated'
+  );
 }
 
 // ─── Summary ─────────────────────────────────────────────────────────────────
