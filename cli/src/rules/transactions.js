@@ -27,7 +27,8 @@ export function checkTransactions(fileContexts) {
 
       // @Transactional + @Async in the same method boundary (propagation breaks)
       const ctx = lines.slice(Math.max(0, i - 3), Math.min(i + 5, lines.length)).join('\n');
-      if (/@Async\b/.test(ctx)) {
+      const ctxNoComments = stripComments(ctx);
+      if (/@Async\b/.test(ctxNoComments)) {
         findings.push({
           severity: 'critical',
           rule: 'transactions',
@@ -39,6 +40,14 @@ export function checkTransactions(fileContexts) {
   }
 
   return deduplicate(findings);
+}
+
+// Strips line (//...) and block (/*...*/) comments so annotation text
+// mentioned inside a comment isn't mistaken for a real annotation.
+function stripComments(text) {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '');
 }
 
 function deduplicate(findings) {

@@ -216,18 +216,8 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
   }
 }
 {
-  // NOTE: current behavior, not the fixture's intent. checkTransactions scans a raw
-  // +/-3..5 line context window around each @Transactional for the literal text
-  // "@Async" without stripping comments first. Line 8 of this fixture —
-  // "// Safe: Transactional without @Async" — falls inside that window and contains
-  // the substring "@Async", so the rule fires even though there is no real @Async
-  // annotation on any method here.
   const json = runOnFixture('TransactionsFalsePositive.java', 'transactions');
-  assert(json.issues.length === 1, 'TransactionsFalsePositive.java currently produces 1 finding (comment-text false positive)');
-  if (json.issues.length === 1) {
-    assert(json.issues[0].ruleId === 'transactions', 'TransactionsFalsePositive finding has ruleId "transactions"');
-    assert(json.issues[0].severity === 'critical', 'TransactionsFalsePositive finding is critical');
-  }
+  assert(json.issues.length === 0, 'TransactionsFalsePositive.java produces 0 findings');
 }
 
 // ─── Summary ─────────────────────────────────────────────────────────────────
