@@ -235,11 +235,11 @@ console.log('\n📋 Test 6: nested directories with colliding basenames');
   assert(new Set(locations).size === locations.length, 'nested findings have distinct locations (no collision)');
 }
 
-// ─── Test 7: applySuppressions pass-through contract ─────────────────────────
-// Step 1 of the SuppressionEngine work: applySuppressions is a pure pass-through
-// today (no inline-comment parsing, no config), so this only asserts the shape
-// contract — same length, suppressed:false added, every other field untouched.
-console.log('\n📋 Test 7: applySuppressions pass-through');
+// ─── Test 7: applySuppressions with no matching fileContexts ────────────────
+// No fileContexts means no directive can ever be found for these locations,
+// so every finding must come back inert: suppressed:false, suppressedBy:null,
+// justification:null, and every original field untouched.
+console.log('\n📋 Test 7: applySuppressions with no matching fileContexts');
 {
   const input = [
     { severity: 'critical', rule: 'transactions', message: 'a', location: 'A.java:1' },
@@ -249,18 +249,99 @@ console.log('\n📋 Test 7: applySuppressions pass-through');
 
   assert(output.length === input.length, 'output has the same number of findings as input');
   assert(output.every(f => f.suppressed === false), 'every finding has suppressed: false');
+  assert(output.every(f => f.suppressedBy === null), 'every finding has suppressedBy: null');
+  assert(output.every(f => f.justification === null), 'every finding has justification: null');
   assert(
     output.every((f, i) => {
-      const { suppressed, ...rest } = f;
+      const { suppressed, suppressedBy, justification, ...rest } = f;
       return Object.keys(rest).every(k => rest[k] === input[i][k])
         && Object.keys(input[i]).every(k => input[i][k] === rest[k]);
     }),
-    'all other fields are unchanged'
+    'all original fields are unchanged'
   );
   assert(
     input.every(f => !('suppressed' in f)),
     'original input findings are not mutated'
   );
+}
+
+// ─── Test 8: applySuppressions resolves a real inline directive ────────────
+console.log('\n📋 Test 8: applySuppressions resolves a real inline directive');
+{
+  const fileContexts = [
+    {
+      relativePath: 'module-a/OrderService.java',
+      lines: [
+        'public class OrderService {',
+        '    void process() {',
+        '        future.join(); // vibe-guard: ignore transactions -- legacy migration',
+        '        otherCall();',
+        '    }',
+        '}',
+      ],
+    },
+  ];
+  const findings = [
+    { severity: 'critical', rule: 'transactions', message: 'blocking call', location: 'module-a/OrderService.java:3' },
+    { severity: 'warning',  rule: 'layers',        message: 'layer violation', location: 'module-a/OrderService.java:4' },
+  ];
+
+  const output = applySuppressions(findings, fileContexts, {});
+  const suppressedFinding = output.find(f => f.location === 'module-a/OrderService.java:3');
+  const activeFinding = output.find(f => f.location === 'module-a/OrderService.java:4');
+
+  assert(suppressedFinding.suppressed === true, 'finding with a matching inline directive is suppressed');
+  assert(suppressedFinding.suppressedBy === 'inline', 'suppressedBy correctly identifies the inline directive');
+  assert(suppressedFinding.justification === 'legacy migration', 'justification captured from the winning directive');
+
+  assert(activeFinding.suppressed === false, 'finding with no applicable directive remains suppressed: false');
+  assert(activeFinding.suppressedBy === null, 'suppressedBy is null when nothing suppressed');
+  assert(activeFinding.justification === null, 'justification is null when nothing suppressed');
+}
+
+// ─── Test 9: applySuppressions resolves fileContext by relativePath, not basename ─
+// Same basename in two different directories — only one has the suppression
+// comment. If lookup were keyed on basename (the bug relativePath already fixed
+// once for dedup), both or neither would resolve correctly.
+console.log('\n📋 Test 9: applySuppressions resolves by relativePath, not basename');
+{
+  const fileContexts = [
+    {
+      relativePath: 'module-a/OrderService.java',
+      lines: ['void a() {', '    // vibe-guard: ignore blocking', '    riskyCall();', '}'],
+    },
+    {
+      relativePath: 'module-b/OrderService.java',
+      lines: ['void b() {', '    riskyCall();', '}'],
+    },
+  ];
+  const findings = [
+    { severity: 'critical', rule: 'blocking', message: 'blocking call', location: 'module-a/OrderService.java:3' },
+    { severity: 'critical', rule: 'blocking', message: 'blocking call', location: 'module-b/OrderService.java:2' },
+  ];
+
+  const output = applySuppressions(findings, fileContexts, {});
+  const suppressedA = output.find(f => f.location === 'module-a/OrderService.java:3');
+  const activeB = output.find(f => f.location === 'module-b/OrderService.java:2');
+
+  assert(suppressedA.suppressed === true, 'module-a finding is suppressed via its own file\'s directive');
+  assert(suppressedA.suppressedBy === 'standalone', 'suppressedBy is standalone for the previous-line comment');
+  assert(activeB.suppressed === false, 'module-b finding (same basename, no directive in its own file) is NOT suppressed');
+}
+
+// ─── Test 10: file-level findings (no ":line" suffix) are never suppressed ──
+console.log('\n📋 Test 10: file-level findings without a line number are never suppressed');
+{
+  const fileContexts = [
+    { relativePath: 'src/kafka-config.yml', lines: ['# vibe-guard: ignore kafka'] },
+  ];
+  const findings = [
+    { severity: 'warning', rule: 'kafka', message: 'missing group.id', location: 'src/kafka-config.yml' },
+  ];
+  const output = applySuppressions(findings, fileContexts, {});
+
+  assert(output[0].suppressed === false, 'file-level finding with no line to resolve against is not suppressed');
+  assert(output[0].suppressedBy === null, 'suppressedBy is null for file-level findings');
 }
 
 // ─── Summary ─────────────────────────────────────────────────────────────────
