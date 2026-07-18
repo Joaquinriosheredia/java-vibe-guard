@@ -4,6 +4,7 @@ import com.vibeguard.mcp.dto.AnalysisResult;
 import com.vibeguard.mcp.dto.FileContent;
 import com.vibeguard.mcp.dto.Issue;
 import com.vibeguard.mcp.rules.Rule;
+import com.vibeguard.mcp.suppression.SuppressionProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -21,9 +22,11 @@ public class VibeGuardEngine {
     private static final Logger log = LoggerFactory.getLogger(VibeGuardEngine.class);
 
     private final List<Rule> rules;
+    private final SuppressionProcessor suppressionProcessor;
 
-    public VibeGuardEngine(List<Rule> rules) {
+    public VibeGuardEngine(List<Rule> rules, SuppressionProcessor suppressionProcessor) {
         this.rules = rules;
+        this.suppressionProcessor = suppressionProcessor;
         log.info("VibeGuardEngine initialized with {} rule(s): {}",
             rules.size(),
             rules.stream().map(Rule::id).toList());
@@ -55,7 +58,8 @@ public class VibeGuardEngine {
             }
         }
 
-        return AnalysisResult.of(projectPath, javaFiles.size(), allIssues);
+        List<Issue> processedIssues = suppressionProcessor.process(allIssues, projectPath);
+        return AnalysisResult.of(projectPath, javaFiles.size(), processedIssues);
     }
 
     private List<Path> collectJavaFiles(Path root) {
