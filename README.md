@@ -264,9 +264,10 @@ The two layers are deliberately redundant in purpose but not in mechanism. The r
 
 | Anti-pattern | Layer that catches it |
 |---|---|
-| `.get()` blocking inside `@Transactional` or `@KafkaListener` | Layers 2 + 3 |
-| Controller accessing repository directly | Layers 2 + 3 |
-| Endpoint without structured logging | Layers 2 + 3 |
+| `.get()`/`.block()` blocking inside `@Transactional` | Layer 3 only (VIBE-001, VIBE-005) |
+| Blocking call inside `@KafkaListener` | Layers 2 + 3 (cli `blocking-kafka` + VIBE-006) |
+| Controller accessing repository directly | Layer 2 only (cli `layers`) |
+| Endpoint without structured logging | Layer 2 only (cli `observability`) |
 | Generated code the LLM declares correct but isn't | Layer 3 (immediate feedback) |
 | Regression introduced by refactoring | Layer 3 (post-change re-analysis) |
 | Technical debt in untouched legacy code | Layer 2 (CI audit) |
