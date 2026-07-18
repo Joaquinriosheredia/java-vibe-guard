@@ -8,9 +8,10 @@
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { mkdtempSync, copyFileSync, rmSync, writeFileSync } from 'fs';
+import { mkdtempSync, copyFileSync, rmSync, writeFileSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { applySuppressions } from '../src/suppression.js';
+import { loadConfig } from '../src/config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI = join(__dirname, '../bin/cli.js');
@@ -56,6 +57,23 @@ function runOnSource(javaSource, args) {
   const dir = mkdtempSync(join(tmpdir(), 'vibe-guard-suppression-'));
   try {
     writeFileSync(join(dir, 'Svc.java'), javaSource);
+    return run([...args, dir]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// Writes an arbitrary set of files (source + vibeguard.config.json) into a
+// shared temp dir and runs the real CLI against that dir — for exercising
+// project-level config (ignore/exclude) rather than a single-file fixture.
+function runOnProject(fileMap, args) {
+  const dir = mkdtempSync(join(tmpdir(), 'vibe-guard-project-'));
+  try {
+    for (const [relPath, content] of Object.entries(fileMap)) {
+      const fullPath = join(dir, relPath);
+      mkdirSync(dirname(fullPath), { recursive: true });
+      writeFileSync(fullPath, content);
+    }
     return run([...args, dir]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -452,6 +470,104 @@ console.log('\n📋 Test 14: zero regression when nothing is suppressed');
   const fullRun = JSON.parse(run(['--json', FIXTURES]).stdout);
   assert(fullRun.summary.suppressed === 0, 'test-fixtures/ (no suppression comments) has summary.suppressed === 0');
   assert(fullRun.summary.reported === fullRun.summary.total, 'test-fixtures/ has reported === total when nothing is suppressed');
+}
+
+// ─── Test 15: config.ignore suppresses a rule id project-wide, no comments ──
+// Same critical-producing source as Test 11, but with the inline directive
+// stripped out — the only thing suppressing it is vibeguard.config.json.
+const UNSUPPRESSED_CRITICAL_SOURCE = SUPPRESSED_CRITICAL_SOURCE.replace(
+  ' // vibe-guard: ignore transactions -- legacy migration, tracked in JIRA-1234',
+  ''
+);
+
+console.log('\n📋 Test 15: config.ignore suppresses a rule id globally without inline comments');
+{
+  const project = {
+    'Svc.java': UNSUPPRESSED_CRITICAL_SOURCE,
+    'vibeguard.config.json': JSON.stringify({ ignore: ['transactions'] }),
+  };
+
+  const { stdout, exitCode } = runOnProject(project, ['--json']);
+  const json = JSON.parse(stdout);
+
+  assert(json.issues.length === 0, 'config.ignore removes the finding from issues[] with no inline comment present');
+  assert(json.summary.critical === 0, 'summary.critical is 0');
+  assert(json.summary.reported === 0, 'summary.reported is 0');
+  assert(json.summary.suppressed === 1, 'summary.suppressed is 1');
+  assert(json.summary.total === 1, 'summary.total is 1');
+  assert(json.healthy === true, 'healthy is true');
+  assert(exitCode === 0, 'exit code is 0 — a config-suppressed critical does not fail the process');
+
+  const { stdout: verboseOut } = runOnProject(project, ['--json', '--verbose']);
+  const verboseJson = JSON.parse(verboseOut);
+  assert(Array.isArray(verboseJson.suppressedIssues) && verboseJson.suppressedIssues.length === 1,
+    '--verbose lists the config-suppressed finding');
+  assert(verboseJson.suppressedIssues[0].suppressedBy === 'config', 'suppressedBy is "config"');
+  assert(verboseJson.suppressedIssues[0].justification === null, 'config suppressions carry no per-instance justification');
+}
+
+// ─── Test 16: exclude removes a file from the scan entirely ────────────────
+// Distinguishes exclude from suppression: an excluded file must never
+// generate a finding to begin with — not "generate one, then hide it". If
+// this were post-hoc filtering, filesScanned/summary.total would show 1
+// finding (suppressed); instead both must read 0.
+console.log('\n📋 Test 16: exclude prevents a file from generating findings at all');
+{
+  const { stdout } = runOnProject({
+    'generated/Excluded.java': UNSUPPRESSED_CRITICAL_SOURCE,
+    'Kept.java': 'package com.example;\npublic class Kept {}\n',
+    'vibeguard.config.json': JSON.stringify({ exclude: ['generated/**'] }),
+  }, ['--json', '--verbose']);
+  const json = JSON.parse(stdout);
+
+  assert(json.filesScanned === 1, 'the excluded file never reaches the scanner — only Kept.java is counted');
+  assert(json.issues.length === 0, 'no findings from the excluded file');
+  assert(json.summary.total === 0, 'summary.total is 0 — proves this is exclusion, not a 1-suppressed finding');
+  assert(json.summary.suppressed === 0, 'summary.suppressed is 0 — an excluded file never produced a finding to suppress');
+  assert(!json.suppressedIssues || json.suppressedIssues.length === 0, '--verbose shows no trace of the excluded finding');
+  assert(json.healthy === true, 'healthy is true');
+}
+
+// ─── Test 17: vibeguard.config.json absent → empty config, no crash ────────
+console.log('\n📋 Test 17: vibeguard.config.json absent → loadConfig returns empty config');
+{
+  const dir = mkdtempSync(join(tmpdir(), 'vibe-guard-config-'));
+  try {
+    const config = loadConfig(dir);
+    assert(Array.isArray(config.ignore) && config.ignore.length === 0, 'ignore defaults to []');
+    assert(Array.isArray(config.exclude) && config.exclude.length === 0, 'exclude defaults to []');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// ─── Test 18: malformed vibeguard.config.json does not break the scan ──────
+console.log('\n📋 Test 18: malformed vibeguard.config.json does not break the scan');
+{
+  const { stdout, exitCode } = runOnProject({
+    'Svc.java': UNSUPPRESSED_CRITICAL_SOURCE,
+    'vibeguard.config.json': '{ this is not valid json',
+  }, ['--json']);
+  const json = JSON.parse(stdout);
+
+  assert(json.issues.length === 1, 'malformed config falls back to empty config — finding is NOT silently suppressed');
+  assert(json.summary.critical === 1, 'summary.critical is 1 (no suppression applied)');
+  assert(json.summary.suppressed === 0, 'summary.suppressed is 0');
+  assert(exitCode === 1, 'exit code is 1 — malformed config does not mask a real critical');
+}
+
+// ─── Test 19: zero regression on test-fixtures/ (no vibeguard.config.json) ─
+console.log('\n📋 Test 19: zero regression on test-fixtures/ with no config file present');
+{
+  const { stdout, exitCode } = run(['--json', FIXTURES]);
+  const json = JSON.parse(stdout);
+
+  assert(json.summary.critical === 4, 'summary.critical unchanged at 4');
+  assert(json.summary.major === 1, 'summary.major unchanged at 1');
+  assert(json.summary.warning === 5, 'summary.warning unchanged at 5');
+  assert(json.summary.reported === 10 && json.summary.total === 10, 'reported === total === 10, unchanged');
+  assert(json.summary.suppressed === 0, 'suppressed is 0 — no config file, no directives');
+  assert(exitCode === 1, 'exit code is 1, unchanged — real criticals still fail the build');
 }
 
 // ─── Summary ─────────────────────────────────────────────────────────────────

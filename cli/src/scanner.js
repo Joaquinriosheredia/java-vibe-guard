@@ -7,6 +7,7 @@ import { checkTransactions } from './rules/transactions.js';
 import { checkObservability } from './rules/observability.js';
 import { printHeader, printFindings, printSummary, printJSON } from './reporter.js';
 import { applySuppressions } from './suppression.js';
+import { loadConfig, makeExcludeMatcher } from './config.js';
 
 const RULES = [
   { id: 'blocking',      fn: checkBlocking },
@@ -55,7 +56,11 @@ export async function runGuard(projectPath, opts = {}) {
     return 1;
   }
 
-  const files = collectFiles(absPath, [], ignoredDirs);
+  const config = loadConfig(absPath);
+  const isExcluded = makeExcludeMatcher(config.exclude);
+
+  const files = collectFiles(absPath, [], ignoredDirs)
+    .filter(filePath => !isExcluded(relative(absPath, filePath)));
   if (files.length === 0) {
     console.error(`No Java/config files found in: ${absPath}`);
     return 1;
@@ -82,7 +87,6 @@ export async function runGuard(projectPath, opts = {}) {
     }
   }
 
-  const config = {};
   const findings = applySuppressions(allFindings, fileContexts, config);
   const visibleFindings = findings.filter(f => !f.suppressed);
 
