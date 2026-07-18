@@ -8,7 +8,7 @@ public class BlockingTruePositive {
     public void runJob() {
         CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> "hello");
         try {
-            String value = future.get(); // BUG: blocking call inside @Scheduled
+            String value = future.join(); // BUG: blocking call inside @Scheduled
             System.out.println(value);
         } catch (Exception e) {}
     }

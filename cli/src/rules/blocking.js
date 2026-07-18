@@ -5,8 +5,11 @@ const ASYNC_ANNOTATIONS = [
   { re: /@EventListener\b/, name: '@EventListener' },
 ];
 
+// Future.get()/CompletableFuture.get() are intentionally NOT detected —
+// distinguishing a blocking Future.get() from a non-blocking Optional.get()/
+// Map.get()/etc. requires receiver type resolution, which this regex-based
+// engine doesn't have. See issue #5 and the pending CLI/MCP architecture ADR.
 const BLOCKING_PATTERNS = [
-  { re: /\.\s*get\s*\(\s*\)(?!\s*\.)/, name: 'blocking .get()' },
   { re: /\.\s*join\s*\(\s*\)/,          name: 'blocking .join()' },
   { re: /\.\s*block\s*\(\s*\)/,         name: 'blocking .block()' },
   { re: /\.\s*blockFirst\s*\(/,         name: 'blocking .blockFirst()' },

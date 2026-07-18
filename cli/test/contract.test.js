@@ -151,17 +151,8 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
   }
 }
 {
-  // NOTE: current behavior, not the fixture's intent. blocking.js's BLOCKING_PATTERNS
-  // matches any ".get()" call — including Optional.get() (line 11), which is not a
-  // blocking call. The rule cannot distinguish Optional/CompletableFuture by regex
-  // alone, so this fixture — despite being named "FalsePositive" and commented as
-  // such in the source — currently produces 1 finding, not 0.
   const json = runOnFixture('BlockingFalsePositive.java', 'blocking');
-  assert(json.issues.length === 1, 'BlockingFalsePositive.java currently produces 1 finding (Optional.get() false positive)');
-  if (json.issues.length === 1) {
-    assert(json.issues[0].ruleId === 'blocking', 'BlockingFalsePositive finding has ruleId "blocking"');
-    assert(json.issues[0].severity === 'critical', 'BlockingFalsePositive finding is critical');
-  }
+  assert(json.issues.length === 0, 'BlockingFalsePositive.java produces 0 findings');
 }
 
 // kafka ────────────────────────────────────────────────────────────────────
