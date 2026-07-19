@@ -55,9 +55,7 @@ function formatSuppressedBlock(f) {
   ].join('\n');
 }
 
-export function printFindings(findings, { verbose = false } = {}) {
-  const visibleFindings = findings.filter(f => !f.suppressed);
-
+export function printFindings(visibleFindings, findings, { verbose = false } = {}) {
   if (visibleFindings.length === 0) {
     console.log(chalk.bold.green('✅ No vibe coding patterns detected. Looks production-ready!'));
   } else {
@@ -86,8 +84,7 @@ export function printFindings(findings, { verbose = false } = {}) {
   }
 }
 
-export function printSummary(findings) {
-  const visibleFindings = findings.filter(f => !f.suppressed);
+export function printSummary(visibleFindings, findings) {
   const suppressedCount = findings.length - visibleFindings.length;
 
   const c = { critical: 0, major: 0, warning: 0, info: 0 };
@@ -120,8 +117,7 @@ export function printSummary(findings) {
   console.log('');
 }
 
-export function printJSON(findings, projectPath, fileCount, { verbose = false } = {}) {
-  const visibleFindings = findings.filter(f => !f.suppressed);
+export function printJSON(visibleFindings, findings, projectPath, fileCount, { verbose = false } = {}) {
   const suppressedFindings = findings.filter(f => f.suppressed);
 
   const c = { critical: 0, major: 0, warning: 0, info: 0 };

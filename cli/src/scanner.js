@@ -1,5 +1,6 @@
 import { readdirSync, statSync, readFileSync } from 'fs';
-import { join, extname, relative, resolve } from 'path';
+import { join, extname, relative, resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { checkBlocking } from './rules/blocking.js';
 import { checkLayers } from './rules/layers.js';
 import { checkKafka } from './rules/kafka.js';
@@ -9,6 +10,20 @@ import { printHeader, printFindings, printSummary, printJSON } from './reporter.
 import { applySuppressions } from './suppression.js';
 import { loadConfig, makeExcludeMatcher } from './config.js';
 import { loadBaseline, writeBaseline, applyBaseline } from './baseline.js';
+import { generateSarif } from './sarif.js';
+
+// docs/sarif.md §7 — tool.driver.version is read from cli/package.json at
+// call time (never hardcoded independently), informationUri/helpUri are the
+// repo's own README, shared across every rule id.
+const PACKAGE_JSON = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../package.json'), 'utf8')
+);
+const REPO_URL = 'https://github.com/Joaquinriosheredia/java-vibe-guard';
+const SARIF_TOOL_META = {
+  version: PACKAGE_JSON.version,
+  informationUri: REPO_URL,
+  helpUri: `${REPO_URL}#readme`,
+};
 
 const RULES = [
   { id: 'blocking',      fn: checkBlocking },
@@ -116,17 +131,26 @@ export async function runGuard(projectPath, opts = {}) {
   // means an empty baseline — identical to today's behavior.
   const baseline = loadBaseline(absPath);
   const findings = applyBaseline(decorated, baseline);
-  const visibleFindings = findings.filter(f => !f.suppressed);
 
-  if (opts.json) {
-    printJSON(findings, projectPath, files.length, { verbose: opts.verbose });
+  // The one and only "what gets reported" filter (docs/sarif.md §5): not
+  // suppressed, not baseline-matched. This exact array feeds text, JSON, and
+  // SARIF output, and the exit code below — no format computes its own,
+  // independently-drifting version of this filter.
+  const visibleFindings = findings.filter(f => !f.suppressed && !f.baselined);
+
+  const format = opts.json ? 'json' : (opts.format || 'text');
+  if (format === 'json') {
+    printJSON(visibleFindings, findings, projectPath, files.length, { verbose: opts.verbose });
+  } else if (format === 'sarif') {
+    console.log(JSON.stringify(generateSarif(visibleFindings, SARIF_TOOL_META), null, 2));
   } else {
     printHeader(projectPath, files.length);
-    printFindings(findings, { verbose: opts.verbose });
-    printSummary(findings);
+    printFindings(visibleFindings, findings, { verbose: opts.verbose });
+    printSummary(visibleFindings, findings);
   }
 
-  // A suppressed finding was reviewed and accepted by the user — it must not
-  // keep blocking CI. Only findings that are still visible can fail the build.
+  // A suppressed or baselined finding was already reviewed/accepted — it
+  // must not keep blocking CI. Only findings that are still visible can
+  // fail the build, regardless of which format was requested.
   return visibleFindings.some(f => f.severity === 'critical') ? 1 : 0;
 }

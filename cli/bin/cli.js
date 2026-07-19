@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { program } from 'commander';
+import { program, Option } from 'commander';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -15,7 +15,10 @@ program
   .version(pkg.version)
   .argument('[path]', 'Path to Java/Spring Boot project to analyze')
   .option('--verify <rule>', 'Verify a VIBE rule is reproducible in your environment (e.g. VIBE-001)')
-  .option('--json', 'Output results as JSON')
+  .addOption(
+    new Option('--format <format>', 'Output format').choices(['text', 'json', 'sarif']).default('text')
+  )
+  .option('--json', 'Output results as JSON (compatibility alias for --format json)')
   .option('--rule <name>', 'Run only one rule: blocking | layers | kafka | transactions | observability')
   .option('--ignore <dirs>', 'Comma-separated directories to exclude (e.g. labs,demos,test)')
   .option('--verbose', 'List suppressed findings with their rule, location, suppressedBy, and justification')
@@ -24,6 +27,7 @@ program
   .parse();
 
 const opts = program.opts();
+if (opts.json) opts.format = 'json'; // --json is a compatibility alias for --format json
 const projectPath = program.args[0];
 
 if (opts.verify) {
