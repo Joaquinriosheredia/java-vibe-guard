@@ -34,6 +34,11 @@ inputs:
     required: false
     default: 'true'
 
+  sarif:
+    description: 'Generate a SARIF report and upload it to GitHub Code Scanning (opt-in)'
+    required: false
+    default: 'false'
+
 # ─── Outputs ──────────────────────────────────────────────────────────────────
 
 outputs:
@@ -56,6 +61,10 @@ outputs:
   report-json:
     description: 'Absolute path to the JSON report file on the runner'
     value: ${{ steps.scan.outputs.report-json }}
+
+  report-sarif:
+    description: 'Absolute path to the SARIF report file on the runner (only set when the sarif input is true)'
+    value: ${{ steps.sarif.outputs.report-sarif }}
 
 # ─── Steps ────────────────────────────────────────────────────────────────────
 
@@ -140,3 +149,34 @@ runs:
         name: vibe-guard-report
         path: ${{ steps.scan.outputs.report-json }}
         retention-days: 30
+
+    - name: Generate SARIF report
+      id: sarif
+      if: ${{ always() && inputs.sarif == 'true' }}
+      shell: bash
+      env:
+        VG_PATH:   ${{ inputs.path }}
+        VG_RULE:   ${{ inputs.rule }}
+        VG_IGNORE: ${{ inputs.ignore }}
+        CLI:       ${{ github.action_path }}/cli/bin/cli.js
+      run: |
+        SARIF_REPORT="$RUNNER_TEMP/vibe-guard-report.sarif"
+
+        ARGS=("$VG_PATH" "--format" "sarif")
+        [[ -n "$VG_RULE"   ]] && ARGS+=("--rule"   "$VG_RULE")
+        [[ -n "$VG_IGNORE" ]] && ARGS+=("--ignore" "$VG_IGNORE")
+
+        # Exit code depends only on visibleFindings, never on --format — same
+        # criticals that would make the Scan step's --json run exit 1 would
+        # do the same here. Whether the job fails is already decided solely
+        # by the Scan step's fail-on policy above; this step must never fail
+        # the job on its own account, so its exit status is discarded.
+        node "$CLI" "${ARGS[@]}" > "$SARIF_REPORT" || true
+
+        echo "report-sarif=$SARIF_REPORT" >> "$GITHUB_OUTPUT"
+
+    - name: Upload SARIF to GitHub Code Scanning
+      if: ${{ always() && inputs.sarif == 'true' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.sarif.outputs.report-sarif }}
