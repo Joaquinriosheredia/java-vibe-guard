@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { runGuard } from '../src/scanner.js';
 import { runVerify } from '../src/verify.js';
+import { runExplain } from '../src/explain.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'));
@@ -15,6 +16,7 @@ program
   .version(pkg.version)
   .argument('[path]', 'Path to Java/Spring Boot project to analyze')
   .option('--verify <rule>', 'Verify a VIBE rule is reproducible in your environment (e.g. VIBE-001)')
+  .option('--explain <rule>', 'Print curated information about a rule id (e.g. kafka, blocking-kafka) — no project scan')
   .addOption(
     new Option('--format <format>', 'Output format').choices(['text', 'json', 'sarif']).default('text')
   )
@@ -30,7 +32,9 @@ const opts = program.opts();
 if (opts.json) opts.format = 'json'; // --json is a compatibility alias for --format json
 const projectPath = program.args[0];
 
-if (opts.verify) {
+if (opts.explain) {
+  process.exitCode = await runExplain(opts.explain);
+} else if (opts.verify) {
   process.exitCode = await runVerify(opts.verify);
 } else if (!projectPath) {
   console.error('Error: path argument is required (or use --verify <rule>)');

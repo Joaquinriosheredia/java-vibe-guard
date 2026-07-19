@@ -2,6 +2,8 @@
 // Spec: docs/sarif.md — any behavior change here must be reflected there
 // first; this file implements that document, it does not define its own
 // contract.
+import { RULE_CATALOG } from './rule-catalog.js';
+
 const LOCATION = /^(.*):(\d+)$/;
 
 const SARIF_VERSION = '2.1.0';
@@ -33,36 +35,6 @@ const SEVERITY_SECURITY_SCORE = {
 // result.level — each result's level always comes straight from its own
 // finding's severity via SEVERITY_LEVEL/mapSeverity above.
 const SEVERITY_RANK = { critical: 0, major: 1, warning: 2, info: 3 };
-
-// Rule catalog for the `rules` array (§6). Content mirrors the rules'
-// actual detection logic (cli/src/rules/*.js) and the README's "Why These
-// Rules Exist" prose — not independently invented text.
-const RULE_DESCRIPTIONS = {
-  blocking: {
-    short: 'Blocking calls detected inside asynchronous execution contexts.',
-    full: 'Detects blocking calls (Thread.sleep, .get(), blocking I/O) inside @Async-annotated methods, which negates the concurrency benefit of asynchronous execution and can exhaust the underlying executor thread pool under load.',
-  },
-  'blocking-kafka': {
-    short: 'Blocking calls detected inside @KafkaListener methods.',
-    full: 'Detects blocking calls inside @KafkaListener-annotated methods, which delays offset commits and can trigger a consumer group rebalance under broker latency or failure.',
-  },
-  kafka: {
-    short: 'Kafka configuration and listener anti-patterns.',
-    full: 'Flags Kafka usage issues: Zookeeper-based configuration deprecated in Kafka 3.x, @KafkaListener without an explicit groupId, listeners without retry/DLQ handling, and consumer configuration missing group.id.',
-  },
-  layers: {
-    short: 'Architectural layering violations.',
-    full: 'Detects a Controller calling a Repository directly, bypassing the Service layer, eroding the transactional and validation boundary the layered architecture is meant to enforce.',
-  },
-  observability: {
-    short: 'Missing structured logging on request-handling endpoints.',
-    full: 'Detects endpoints that lack structured logging, reducing the ability to trace and diagnose request behavior in production.',
-  },
-  transactions: {
-    short: 'Transactional-boundary and rollback anti-patterns.',
-    full: 'Detects @Transactional methods with missing rollback configuration or blocking calls made while holding a database transaction open, either of which can exhaust the connection pool or cause silent data loss under failure.',
-  },
-};
 
 export function mapSeverity(severity) {
   return {
@@ -116,7 +88,7 @@ export function buildRules(visibleFindings, toolMeta) {
   const rules = [];
   for (const [ruleId, severities] of severitiesByRuleId) {
     const { level, securitySeverity } = mapSeverity(highestSeverity(severities));
-    const description = RULE_DESCRIPTIONS[ruleId] ?? { short: ruleId, full: ruleId };
+    const description = RULE_CATALOG[ruleId] ?? { short: ruleId, full: ruleId };
     rules.push({
       id: ruleId,
       name: ruleId,
