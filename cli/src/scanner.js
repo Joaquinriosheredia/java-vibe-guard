@@ -8,6 +8,7 @@ import { checkObservability } from './rules/observability.js';
 import { printHeader, printFindings, printSummary, printJSON } from './reporter.js';
 import { applySuppressions } from './suppression.js';
 import { loadConfig, makeExcludeMatcher } from './config.js';
+import { loadBaseline, writeBaseline, applyBaseline } from './baseline.js';
 
 const RULES = [
   { id: 'blocking',      fn: checkBlocking },
@@ -87,7 +88,34 @@ export async function runGuard(projectPath, opts = {}) {
     }
   }
 
-  const findings = applySuppressions(allFindings, fileContexts, config);
+  const decorated = applySuppressions(allFindings, fileContexts, config);
+
+  // --baseline stops here: write the snapshot and exit. No report, no
+  // criticals-based exit code — baseline creation isn't a pass/fail check
+  // (docs/baseline.md §7). writeBaseline itself stays unguarded; this is the
+  // one place that catches a write failure, same pattern as the file-count
+  // and per-rule guards above.
+  if (opts.baseline) {
+    let written;
+    try {
+      written = writeBaseline(absPath, decorated);
+    } catch (e) {
+      console.error(`Failed to write vibeguard-baseline.json: ${e.message}`);
+      return 1;
+    }
+    const activeCount = decorated.filter(f => !f.suppressed).length;
+    const suppressedCount = decorated.filter(f => f.suppressed).length;
+    console.log('Baseline written to vibeguard-baseline.json');
+    console.log(`(${written.buckets.length} buckets generated from ${activeCount} active findings; ${suppressedCount} suppressed findings omitted)`);
+    return 0;
+  }
+
+  // Automatic consumption (docs/baseline.md §8): if vibeguard-baseline.json
+  // exists at the project root, every non-suppressed finding is evaluated
+  // against it and decorated with baselined/baselineSkipped. Its absence
+  // means an empty baseline — identical to today's behavior.
+  const baseline = loadBaseline(absPath);
+  const findings = applyBaseline(decorated, baseline);
   const visibleFindings = findings.filter(f => !f.suppressed);
 
   if (opts.json) {

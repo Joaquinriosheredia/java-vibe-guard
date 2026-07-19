@@ -19,6 +19,7 @@ program
   .option('--rule <name>', 'Run only one rule: blocking | layers | kafka | transactions | observability')
   .option('--ignore <dirs>', 'Comma-separated directories to exclude (e.g. labs,demos,test)')
   .option('--verbose', 'List suppressed findings with their rule, location, suppressedBy, and justification')
+  .option('--baseline', 'Write/regenerate vibeguard-baseline.json from the current scan and exit (no report, no exit code by criticals)')
   .option('--no-color', 'Disable colored output')
   .parse();
 
