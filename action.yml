@@ -154,6 +154,15 @@ runs:
       id: sarif
       if: ${{ always() && inputs.sarif == 'true' }}
       shell: bash
+      # VG_PATH/VG_RULE/VG_IGNORE are recomputed from inputs.* here rather than
+      # reused from the Scan step above — composite action steps do not share
+      # env vars with each other (a step's `env:` is scoped to that step's own
+      # `run` only), so there is no way to "reuse" Scan's copies. This is a
+      # duplication of Scan's env block (lines ~88-91), not an independent
+      # definition: if the input-defaulting/plumbing logic there ever changes
+      # (new input, renamed var, different default handling), it must be
+      # replicated here by hand — nothing enforces the two blocks staying in
+      # sync automatically.
       env:
         VG_PATH:   ${{ inputs.path }}
         VG_RULE:   ${{ inputs.rule }}
@@ -166,17 +175,31 @@ runs:
         [[ -n "$VG_RULE"   ]] && ARGS+=("--rule"   "$VG_RULE")
         [[ -n "$VG_IGNORE" ]] && ARGS+=("--ignore" "$VG_IGNORE")
 
-        # Exit code depends only on visibleFindings, never on --format — same
-        # criticals that would make the Scan step's --json run exit 1 would
-        # do the same here. Whether the job fails is already decided solely
-        # by the Scan step's fail-on policy above; this step must never fail
-        # the job on its own account, so its exit status is discarded.
+        # Exit code 1 here is ambiguous by itself: it means either "critical
+        # findings were found" (normal, expected — same as the Scan step's
+        # --json run) OR "sarif.js/scanner.js crashed with an uncaught
+        # exception" (a real bug). Node's default handler exits 1 in both
+        # cases, so the exit code alone cannot distinguish them. `|| true`
+        # only stops this step's `-e` from aborting the script on the first
+        # (expected) case — it is NOT the real pass/fail gate for this step.
+        # The actual gate is the file-content check below, which fails loudly
+        # on a missing/corrupt report regardless of what the exit code was.
         node "$CLI" "${ARGS[@]}" > "$SARIF_REPORT" || true
+
+        if [[ ! -s "$SARIF_REPORT" ]] || ! jq empty "$SARIF_REPORT" 2>/dev/null; then
+          echo "::error::java-vibe-guard: SARIF generation produced no output or invalid JSON — this indicates a bug in the SARIF writer, not a scan finding. Check the step logs above for the underlying error." >&2
+          exit 1
+        fi
 
         echo "report-sarif=$SARIF_REPORT" >> "$GITHUB_OUTPUT"
 
     - name: Upload SARIF to GitHub Code Scanning
-      if: ${{ always() && inputs.sarif == 'true' }}
+      # steps.sarif.outcome == 'success' guards against the Generate SARIF
+      # report step's own failure mode (missing/corrupt report, see the file
+      # check above): without this, always() would still try to run this
+      # step and upload an empty/undefined sarif_file, producing a second,
+      # confusing failure instead of cleanly skipping.
+      if: ${{ always() && inputs.sarif == 'true' && steps.sarif.outcome == 'success' }}
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: ${{ steps.sarif.outputs.report-sarif }}
