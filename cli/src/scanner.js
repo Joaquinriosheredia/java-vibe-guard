@@ -6,6 +6,7 @@ import { checkLayers } from './rules/layers.js';
 import { checkKafka } from './rules/kafka.js';
 import { checkTransactions } from './rules/transactions.js';
 import { checkObservability } from './rules/observability.js';
+import { RULE_CATALOG } from './rule-catalog.js';
 import { printHeader, printFindings, printSummary, printJSON } from './reporter.js';
 import { applySuppressions } from './suppression.js';
 import { loadConfig, makeExcludeMatcher } from './config.js';
@@ -25,13 +26,26 @@ const SARIF_TOOL_META = {
   helpUri: `${REPO_URL}#readme`,
 };
 
-const RULES = [
+// Exported for tests (contract.test.js) to verify by function-reference
+// identity that the 'blocking-kafka' alias below resolves to the exact same
+// checkBlocking function as the 'blocking' entry — not a re-implementation.
+export const RULES = [
   { id: 'blocking',      fn: checkBlocking },
   { id: 'layers',        fn: checkLayers },
   { id: 'kafka',         fn: checkKafka },
   { id: 'transactions',  fn: checkTransactions },
   { id: 'observability', fn: checkObservability },
 ];
+
+// blocking-kafka has no detector of its own — checkBlocking() (blocking.js)
+// emits both 'blocking' and 'blocking-kafka' findings from a single pass,
+// choosing the rule id per-finding based on which async annotation it saw
+// (blocking.js:50). So --rule blocking-kafka must execute checkBlocking too;
+// this alias is what makes that happen without a duplicate RULES entry that
+// would run the same fileContexts through checkBlocking twice.
+export const RULE_FN_ALIASES = { 'blocking-kafka': 'blocking' };
+
+const VALID_RULE_IDS = Object.keys(RULE_CATALOG);
 
 const DEFAULT_IGNORED_DIRS = new Set([
   'node_modules', '.git', 'target', 'build', '.gradle', '.mvn',
@@ -60,16 +74,18 @@ export function collectFiles(dir, files = [], ignoredDirs = DEFAULT_IGNORED_DIRS
 export async function runGuard(projectPath, opts = {}) {
   const absPath = resolve(projectPath);
   const only = opts.rule ? opts.rule.toLowerCase() : null;
-  const rules = only ? RULES.filter(r => r.id === only) : RULES;
+
+  if (only && !VALID_RULE_IDS.includes(only)) {
+    console.error(`Unknown rule: "${only}". Valid: ${VALID_RULE_IDS.join(', ')}`);
+    return 1;
+  }
+
+  const execId = RULE_FN_ALIASES[only] || only;
+  const rules = execId ? RULES.filter(r => r.id === execId) : RULES;
 
   const ignoredDirs = new Set(DEFAULT_IGNORED_DIRS);
   if (opts.ignore) {
     opts.ignore.split(',').map(d => d.trim()).filter(Boolean).forEach(d => ignoredDirs.add(d));
-  }
-
-  if (only && rules.length === 0) {
-    console.error(`Unknown rule: "${only}". Valid: ${RULES.map(r => r.id).join(', ')}`);
-    return 1;
   }
 
   const config = loadConfig(absPath);
@@ -103,7 +119,14 @@ export async function runGuard(projectPath, opts = {}) {
     }
   }
 
-  const decorated = applySuppressions(allFindings, fileContexts, config);
+  // --rule filters by the emitted finding.rule after analysis.
+  // This intentionally keeps CLI semantics based on ruleId rather
+  // than detector implementation. If a detector emits an
+  // unexpected ruleId, that finding will not match the requested
+  // filter.
+  const selectedFindings = only ? allFindings.filter(f => f.rule === only) : allFindings;
+
+  const decorated = applySuppressions(selectedFindings, fileContexts, config);
 
   // --baseline stops here: write the snapshot and exit. No report, no
   // criticals-based exit code — baseline creation isn't a pass/fail check

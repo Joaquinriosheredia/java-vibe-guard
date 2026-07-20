@@ -105,7 +105,7 @@ console.log('\n📋 Test 1: --baseline writes vibeguard-baseline.json from a rea
     assert(Array.isArray(written.buckets), 'written file has a buckets array');
 
     const totalCount = written.buckets.reduce((sum, b) => sum + b.count, 0);
-    assert(totalCount === 10, `bucket counts sum to the 10 active findings in test-fixtures/: got ${totalCount}`);
+    assert(totalCount === 11, `bucket counts sum to the 11 active findings in test-fixtures/: got ${totalCount}`);
 
     const activeCount = totalCount;
     assert(
@@ -206,10 +206,10 @@ console.log('\n📋 Test 5: zero regression when no baseline file and no --basel
     const { stdout, exitCode } = run(['--json', dir]);
     const json = JSON.parse(stdout);
 
-    assert(json.summary.critical === 4, 'summary.critical unchanged at 4');
+    assert(json.summary.critical === 5, 'summary.critical is 5 (includes the KafkaBlockingProbe.java blocking-kafka fixture)');
     assert(json.summary.major === 1, 'summary.major unchanged at 1');
     assert(json.summary.warning === 5, 'summary.warning unchanged at 5');
-    assert(json.summary.reported === 10 && json.summary.total === 10, 'reported === total === 10, unchanged');
+    assert(json.summary.reported === 11 && json.summary.total === 11, 'reported === total === 11 (was 10 before the blocking-kafka fixture was added)');
     assert(json.summary.suppressed === 0, 'suppressed is 0, unchanged');
     assert(exitCode === 1, 'exit code is 1, unchanged — real criticals still fail the build');
     assert(

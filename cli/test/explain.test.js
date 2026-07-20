@@ -295,13 +295,16 @@ console.log('\n📋 §9: Out of scope — no --format for explain, no --explain-
   const explainAll = run(['--explain-all']);
   assert(explainAll.exitCode !== 0, '--explain-all is not a recognized option — rejected by commander');
 
-  // Issue #7 (--rule rejects blocking-kafka) is explicitly not fixed by this
-  // work — --explain uses its own correct 6-id list, but --rule's separate,
-  // narrower 5-id list is untouched.
-  const ruleFlag = run(['--rule', 'blocking-kafka', join(__dirname, '../test-fixtures')]);
+  // Issue #7 (--rule rejects blocking-kafka) is now fixed — --rule derives
+  // its valid-id list from RULE_CATALOG, the same 6-id source --explain
+  // uses (scanner.js's VALID_RULE_IDS), so blocking-kafka is accepted and
+  // filters findings down to exactly that ruleId.
+  const ruleFlag = run(['--json', '--rule', 'blocking-kafka', join(__dirname, '../test-fixtures')]);
+  const ruleJson = JSON.parse(ruleFlag.stdout);
+  assert(ruleFlag.exitCode === 1, '--rule blocking-kafka now succeeds (exit reflects real critical findings, not an unknown-rule error)');
   assert(
-    ruleFlag.exitCode === 1 && /Unknown rule: "blocking-kafka"/.test(ruleFlag.stderr),
-    '--rule blocking-kafka still fails exactly as before (issue #7 untouched by this work)'
+    ruleJson.issues.length > 0 && ruleJson.issues.every(i => i.ruleId === 'blocking-kafka'),
+    '--rule blocking-kafka returns only blocking-kafka findings (issue #7 fixed)'
   );
 }
 

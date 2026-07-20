@@ -12,6 +12,8 @@ import { mkdtempSync, copyFileSync, rmSync, writeFileSync, mkdirSync } from 'fs'
 import { tmpdir } from 'os';
 import { applySuppressions } from '../src/suppression.js';
 import { loadConfig } from '../src/config.js';
+import { RULES, RULE_FN_ALIASES } from '../src/scanner.js';
+import { checkBlocking } from '../src/rules/blocking.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI = join(__dirname, '../bin/cli.js');
@@ -255,6 +257,82 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
 {
   const json = runOnFixture('TransactionsFalsePositive.java', 'transactions');
   assert(json.issues.length === 0, 'TransactionsFalsePositive.java produces 0 findings');
+}
+
+// ─── Test 5b: --rule post-filter — blocking vs blocking-kafka (issue #7) ────
+// KafkaBlockingProbe.java produces a single blocking-kafka finding (a bare
+// .join() inside a @KafkaListener method — blocking.js:50 picks the rule id
+// per-finding, not per-detector). Both --rule blocking and --rule
+// blocking-kafka execute the same checkBlocking() detector (the alias in
+// scanner.js), so the only thing separating their results is the post-filter
+// on finding.rule — before this fix, --rule blocking leaked blocking-kafka
+// findings too.
+console.log('\n📋 Test 5b: --rule blocking vs --rule blocking-kafka (issue #7)');
+{
+  const dir = mkdtempSync(join(tmpdir(), 'vibe-guard-rule-filter-'));
+  try {
+    copyFileSync(join(FIXTURES, 'BlockingTruePositive.java'), join(dir, 'BlockingTruePositive.java'));
+    copyFileSync(join(FIXTURES, 'KafkaBlockingProbe.java'), join(dir, 'KafkaBlockingProbe.java'));
+
+    const blockingOnly = JSON.parse(run(['--json', '--rule', 'blocking', dir]).stdout);
+    assert(blockingOnly.issues.length === 1, '--rule blocking returns exactly 1 finding');
+    assert(blockingOnly.issues.every(i => i.ruleId === 'blocking'), '--rule blocking returns only ruleId "blocking" (no blocking-kafka leak)');
+
+    const blockingKafkaResult = run(['--json', '--rule', 'blocking-kafka', dir]);
+    const blockingKafkaOnly = JSON.parse(blockingKafkaResult.stdout);
+    assert(blockingKafkaOnly.issues.length === 1, '--rule blocking-kafka returns exactly 1 finding');
+    assert(blockingKafkaOnly.issues.every(i => i.ruleId === 'blocking-kafka'), '--rule blocking-kafka returns only ruleId "blocking-kafka" (no blocking leak)');
+    // blocking-kafka findings are always severity "critical" (rule-catalog.js),
+    // so a visible blocking-kafka finding fails the build like any other
+    // critical finding — exit code 1, same as --rule blocking above.
+    assert(blockingKafkaResult.exitCode === 1, '--rule blocking-kafka exits 1 — the finding is a real, visible critical');
+
+    const both = JSON.parse(run(['--json', dir]).stdout);
+    assert(both.issues.some(i => i.ruleId === 'blocking'), 'unfiltered scan still reports the "blocking" finding');
+    assert(both.issues.some(i => i.ruleId === 'blocking-kafka'), 'unfiltered scan still reports the "blocking-kafka" finding');
+    assert(both.issues.length === 2, 'unfiltered scan reports both findings and nothing else');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// ─── Test 5c: --rule blocking-kafka is a no-op (exit 0) when nothing matches ─
+// KafkaTruePositive.java has a @KafkaListener but no blocking call inside
+// it — --rule blocking-kafka on it alone must find nothing.
+console.log('\n📋 Test 5c: --rule blocking-kafka is exit 0 when nothing matches');
+{
+  const json = runOnFixture('KafkaTruePositive.java', 'blocking-kafka');
+  assert(json.issues.length === 0, '--rule blocking-kafka finds nothing in KafkaTruePositive.java (no blocking call)');
+}
+
+// ─── Test 5d: zero regression — other 4 rule ids unaffected by the post-filter ─
+console.log('\n📋 Test 5d: --rule zero regression for kafka/layers/observability/transactions');
+{
+  for (const [fixture, rule] of [
+    ['KafkaTruePositive.java', 'kafka'],
+    ['LayersTruePositive.java', 'layers'],
+    ['ObservabilityTruePositive.java', 'observability'],
+    ['TransactionsTruePositive.java', 'transactions'],
+  ]) {
+    const json = runOnFixture(fixture, rule);
+    assert(json.issues.length > 0, `--rule ${rule} on ${fixture} still finds its expected finding(s)`);
+    assert(json.issues.every(i => i.ruleId === rule), `--rule ${rule} on ${fixture} returns only ruleId "${rule}", unchanged`);
+  }
+}
+
+// ─── Test 5e: 'blocking' and 'blocking-kafka' resolve to the same rule.fn ──
+// Function-reference identity, not string/source comparison — RULES has one
+// entry for 'blocking'; RULE_FN_ALIASES maps 'blocking-kafka' -> 'blocking',
+// so both must resolve to the exact same checkBlocking function object.
+console.log("\n📋 Test 5e: 'blocking' and 'blocking-kafka' resolve to the same rule.fn (checkBlocking)");
+{
+  const blockingEntry = RULES.find(r => r.id === 'blocking');
+  assert(blockingEntry.fn === checkBlocking, "RULES['blocking'].fn is checkBlocking itself");
+
+  const aliasTarget = RULE_FN_ALIASES['blocking-kafka'];
+  const aliasedEntry = RULES.find(r => r.id === aliasTarget);
+  assert(aliasedEntry.fn === checkBlocking, "the 'blocking-kafka' alias resolves to checkBlocking itself");
+  assert(blockingEntry.fn === aliasedEntry.fn, "'blocking' and 'blocking-kafka' resolve to the identical rule.fn reference");
 }
 
 // ─── Test 6: same-filename collision across nested directories ───────────────
@@ -562,10 +640,10 @@ console.log('\n📋 Test 19: zero regression on test-fixtures/ with no config fi
   const { stdout, exitCode } = run(['--json', FIXTURES]);
   const json = JSON.parse(stdout);
 
-  assert(json.summary.critical === 4, 'summary.critical unchanged at 4');
+  assert(json.summary.critical === 5, 'summary.critical is 5 (includes the KafkaBlockingProbe.java blocking-kafka fixture)');
   assert(json.summary.major === 1, 'summary.major unchanged at 1');
   assert(json.summary.warning === 5, 'summary.warning unchanged at 5');
-  assert(json.summary.reported === 10 && json.summary.total === 10, 'reported === total === 10, unchanged');
+  assert(json.summary.reported === 11 && json.summary.total === 11, 'reported === total === 11 (was 10 before the blocking-kafka fixture was added)');
   assert(json.summary.suppressed === 0, 'suppressed is 0 — no config file, no directives');
   assert(exitCode === 1, 'exit code is 1, unchanged — real criticals still fail the build');
 }

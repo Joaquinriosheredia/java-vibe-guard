@@ -105,7 +105,7 @@ console.log('\n📋 Test 1: --format sarif over test-fixtures/ produces a well-f
   assert(driver.rules.every(r => r.helpUri === driver.rules[0].helpUri), 'every rule shares the same helpUri');
 
   const results = doc.runs[0].results;
-  assert(results.length === 10, `10 results, matching the 10 active findings in test-fixtures/: got ${results.length}`);
+  assert(results.length === 11, `11 results, matching the 11 active findings in test-fixtures/: got ${results.length}`);
   assert(results.every(r => ['error', 'warning', 'note'].includes(r.level)), 'every result has a valid SARIF level');
   assert(results.every(r => typeof r.message.text === 'string' && r.message.text.length > 0), 'every result has a non-empty message');
   assert(
@@ -131,10 +131,10 @@ console.log('\n📋 Test 2: zero regression for default text output and --json')
   const jsonRun = run(['--json', FIXTURES]);
   const json = JSON.parse(jsonRun.stdout);
   assert(jsonRun.exitCode === 1, '--json exit code is 1, unchanged');
-  assert(json.summary.critical === 4, '--json summary.critical unchanged at 4');
+  assert(json.summary.critical === 5, '--json summary.critical is 5 (includes the KafkaBlockingProbe.java blocking-kafka fixture)');
   assert(json.summary.major === 1, '--json summary.major unchanged at 1');
   assert(json.summary.warning === 5, '--json summary.warning unchanged at 5');
-  assert(json.summary.reported === 10 && json.summary.total === 10, '--json reported === total === 10, unchanged');
+  assert(json.summary.reported === 11 && json.summary.total === 11, '--json reported === total === 11 (was 10 before the blocking-kafka fixture was added)');
   assert(json.summary.suppressed === 0, '--json suppressed is 0, unchanged');
 
   const formatJsonRun = run(['--format', 'json', FIXTURES]);
@@ -200,8 +200,8 @@ console.log('\n📋 Test 5: --json and --format sarif carry the same logical fin
   const jsonKeys = findingKeysFromJSON(json);
   const sarifKeys = findingKeysFromSarif(sarif);
 
-  assert(jsonKeys.size === 10, `--json reports 10 distinct (ruleId, location, message) tuples: got ${jsonKeys.size}`);
-  assert(sarifKeys.size === 10, `--format sarif reports 10 distinct (ruleId, location, message) tuples: got ${sarifKeys.size}`);
+  assert(jsonKeys.size === 11, `--json reports 11 distinct (ruleId, location, message) tuples: got ${jsonKeys.size}`);
+  assert(sarifKeys.size === 11, `--format sarif reports 11 distinct (ruleId, location, message) tuples: got ${sarifKeys.size}`);
 
   const onlyInJson = [...jsonKeys].filter(k => !sarifKeys.has(k));
   const onlyInSarif = [...sarifKeys].filter(k => !jsonKeys.has(k));

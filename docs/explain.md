@@ -93,13 +93,17 @@ The six real values that appear in `finding.rule` across
 blocking, blocking-kafka, kafka, layers, observability, transactions
 ```
 
-This is **not** the same list `RULES` (`cli/src/scanner.js:28-34`) or
-`--rule` recognize — that list has only 5 entries and rejects
-`blocking-kafka` (`cli/src/scanner.js:71`, tracked as issue #7, out of
-scope here — see §7). `--explain` uses the 6-id list above exclusively,
-because a `finding.rule` value is exactly what someone looks up, and
-`blocking-kafka` is a real value of that field regardless of `--rule`'s
-narrower scan-filter bug.
+`RULES` (`cli/src/scanner.js:29-35`) — the array of detector functions —
+still has only 5 entries, one per rule-check function; that is unrelated
+to id *validation*. `--rule`'s unknown-rule check (`cli/src/scanner.js:75`)
+derives its valid-id list from `RULE_CATALOG` the same way `--explain`
+does (`VALID_RULE_IDS = Object.keys(RULE_CATALOG)`, mirroring
+`explain.js`'s `RULE_IDS`), so both flags now validate against the same
+6-id list. `blocking-kafka` has no detector of its own — `checkBlocking()`
+emits both `blocking` and `blocking-kafka` findings from one pass — so
+`--rule blocking-kafka` executes `checkBlocking()` via an explicit alias
+and then narrows the result to `finding.rule === 'blocking-kafka'` in a
+post-filter (issue #7, fixed).
 
 ## 4. Output format
 
@@ -263,11 +267,10 @@ same as `--verify`, `--explain` short-circuits before the
   `--explain` (e.g. a JSON-shaped explain output), `--explain-all` (dump
   every rule id at once), or any other variant. v1 is exactly
   `--explain <rule>`, one rule id in, plain text out, nothing else.
-- **Fixing `--rule`'s rejection of `blocking-kafka`** — tracked separately
-  as issue #7. `--explain` deliberately uses its own correct 6-id list
-  (§3) rather than reusing `RULES`/`--rule`'s buggy 5-id one, but does not
-  fix the bug itself; `--rule blocking-kafka` remains broken after this
-  work lands.
+- ~~**Fixing `--rule`'s rejection of `blocking-kafka`**~~ — was tracked
+  separately as issue #7; now fixed. `--rule` validates against
+  `RULE_CATALOG`'s 6-id list, same as `--explain` (§3), and
+  `--rule blocking-kafka` filters findings to exactly that ruleId.
 
 ## 10. Status
 
