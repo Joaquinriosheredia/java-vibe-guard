@@ -61,8 +61,8 @@ function assertFieldOrder(stdout, fields, label) {
   assert(inOrder, label);
 }
 
-const SIX_RULE_IDS = ['blocking', 'blocking-kafka', 'kafka', 'layers', 'observability', 'transactions'];
-const AVAILABLE_LIST = SIX_RULE_IDS.join(', ');
+const SEVEN_RULE_IDS = ['blocking', 'blocking-kafka', 'kafka', 'kafka-send-timeout', 'layers', 'observability', 'transactions'];
+const AVAILABLE_LIST = SEVEN_RULE_IDS.join(', ');
 
 // ─── §1: Purpose — no project scan, no path argument ─────────────────────────
 console.log('\n📋 §1: Purpose — --explain runs without scanning any project');
@@ -99,6 +99,7 @@ console.log('\n📋 §2: Data source — rule-catalog.js content and corrected c
   assert(RULE_CATALOG.blocking.severities.join(',') === 'critical', 'blocking: single severity, critical');
   assert(RULE_CATALOG['blocking-kafka'].severities.join(',') === 'critical', 'blocking-kafka: single severity, critical');
   assert(RULE_CATALOG.kafka.severities.join(',') === 'warning', 'kafka: single severity, warning');
+  assert(RULE_CATALOG['kafka-send-timeout'].severities.join(',') === 'critical', 'kafka-send-timeout: single severity, critical');
   assert(RULE_CATALOG.layers.severities.join(',') === 'major', 'layers: single severity, major');
   assert(RULE_CATALOG.observability.severities.join(',') === 'warning', 'observability: single severity, warning');
   assert(
@@ -153,15 +154,15 @@ console.log('\n📋 §2: Data source — rule-catalog.js content and corrected c
   assert(!/const RULE_DESCRIPTIONS\s*=/.test(sarifSrc), 'sarif.js no longer defines RULE_DESCRIPTIONS inline');
 }
 
-// ─── §3: Valid rule ids — the 6-id list, not RULES's 5-id list ───────────────
-console.log('\n📋 §3: Valid rule ids — exactly the 6 real finding.rule values');
+// ─── §3: Valid rule ids — the 7-id list, not RULES's 6-id list ───────────────
+console.log('\n📋 §3: Valid rule ids — exactly the 7 real finding.rule values');
 {
   const keys = Object.keys(RULE_CATALOG).sort();
   assert(
-    keys.join(',') === [...SIX_RULE_IDS].sort().join(','),
-    `RULE_CATALOG has exactly the 6 real rule ids, including blocking-kafka: got ${keys.join(',')}`
+    keys.join(',') === [...SEVEN_RULE_IDS].sort().join(','),
+    `RULE_CATALOG has exactly the 7 real rule ids, including blocking-kafka: got ${keys.join(',')}`
   );
-  assert(keys.includes('blocking-kafka'), 'blocking-kafka is present — unlike RULES/--rule\'s 5-id list (issue #7)');
+  assert(keys.includes('blocking-kafka'), 'blocking-kafka is present — unlike RULES/--rule\'s 6-id list (issue #7)');
 }
 
 // ─── §4: Output format — 4 fields, in order ───────────────────────────────────
@@ -202,10 +203,10 @@ console.log('\n📋 §4: Output format — rule id, Severity line, short, full, 
   );
 }
 
-// ─── §5: Behavior — all 6 valid rule ids produce the 4 fields, exit 0 ───────
-console.log('\n📋 §5: Behavior — every one of the 6 real rule ids works end-to-end');
+// ─── §5: Behavior — all 7 valid rule ids produce the 4 fields, exit 0 ───────
+console.log('\n📋 §5: Behavior — every one of the 7 real rule ids works end-to-end');
 {
-  for (const ruleId of SIX_RULE_IDS) {
+  for (const ruleId of SEVEN_RULE_IDS) {
     const { stdout, stderr, exitCode } = run(['--explain', ruleId]);
     const entry = RULE_CATALOG[ruleId];
     assert(exitCode === 0, `--explain ${ruleId}: exit code 0`);
@@ -296,7 +297,7 @@ console.log('\n📋 §9: Out of scope — no --format for explain, no --explain-
   assert(explainAll.exitCode !== 0, '--explain-all is not a recognized option — rejected by commander');
 
   // Issue #7 (--rule rejects blocking-kafka) is now fixed — --rule derives
-  // its valid-id list from RULE_CATALOG, the same 6-id source --explain
+  // its valid-id list from RULE_CATALOG, the same 7-id source --explain
   // uses (scanner.js's VALID_RULE_IDS), so blocking-kafka is accepted and
   // filters findings down to exactly that ruleId.
   const ruleFlag = run(['--json', '--rule', 'blocking-kafka', join(__dirname, '../test-fixtures')]);

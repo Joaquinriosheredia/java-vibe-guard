@@ -195,7 +195,7 @@ Full options:
 - uses: Joaquinriosheredia/java-vibe-guard@v1
   with:
     path: '.'
-    rule: ''             # blank = all rules; or: blocking | layers | kafka | transactions | observability
+    rule: ''             # blank = all rules; or: blocking | blocking-kafka | kafka | kafka-send-timeout | layers | transactions | observability
     ignore: 'labs,demo'  # comma-separated dirs to skip
     fail-on: 'critical'  # critical | never
     upload-report: 'true'  # attach JSON report as artifact
@@ -266,6 +266,7 @@ The two layers are deliberately redundant in purpose but not in mechanism. The r
 |---|---|
 | `.get()`/`.block()` blocking inside `@Transactional` | Layer 3 only (VIBE-001, VIBE-005) |
 | Blocking call inside `@KafkaListener` | Layers 2 + 3 (cli `blocking-kafka` + VIBE-006) |
+| Kafka `send().get()` with no timeout argument | Layer 2 only (cli `kafka-send-timeout`) |
 | Controller accessing repository directly | Layer 2 only (cli `layers`) |
 | Endpoint without structured logging | Layer 2 only (cli `observability`) |
 | Generated code the LLM declares correct but isn't | Layer 3 (immediate feedback) |

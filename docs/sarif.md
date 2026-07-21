@@ -115,7 +115,7 @@ matches `relativePath:line` (the `LOCATION` regex already used by
 Some findings have no single line to anchor to — e.g. `kafka.js`'s
 "Kafka config without consumer group.id" check, which inspects an entire
 `.properties`/`.yml` file for the *absence* of a setting
-(`cli/src/rules/kafka.js:77-87`, `location: relativePath` — no `:line`
+(`cli/src/rules/kafka.js:79-89`, `location: relativePath` — no `:line`
 suffix, and the source already carries a comment anticipating this exact
 SARIF split). For these, `physicalLocation` carries **only**
 `artifactLocation`, with no `region` key at all:
@@ -174,8 +174,9 @@ is no SARIF-native trace of it (no `suppressions` object, no
 
 One entry per distinct rule id that appears among `visibleFindings` in
 the current run. Known rule ids today (`cli/src/rules/*.js`): `blocking`,
-`blocking-kafka`, `kafka`, `layers`, `observability`, `transactions` (the
-same six enumerated in `docs/suppression-grammar.md` §0/§7).
+`blocking-kafka`, `kafka`, `kafka-send-timeout`, `layers`, `observability`,
+`transactions` (the same seven enumerated in `docs/suppression-grammar.md`
+§0/§7).
 
 | Field | Value |
 |---|---|

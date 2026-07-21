@@ -10,14 +10,17 @@
 // same rank sarif.js's SEVERITY_RANK and reporter.js's SEVERITY_ORDER use).
 // Hand-maintained: if cli/src/rules/*.js ever changes what severity a rule
 // id emits, this array must be updated here too — nothing enforces the two
-// staying in sync automatically. Evidence for the six values below:
+// staying in sync automatically. Evidence for the seven values below:
 //   - blocking / blocking-kafka: always 'critical' (blocking.js:49, one
 //     shared findings.push call site for both rule ids).
-//   - kafka: always 'warning' (kafka.js:20,49,60,78 — all four call sites).
+//   - kafka: always 'warning' (kafka.js:22,51,62,80 — all four call sites).
+//   - kafka-send-timeout: always 'critical' (kafka.js:154, single call
+//     site). New rule, evidence: Java-Production-Labs SagaOrderService.java:45
+//     (commit 01cee18) and StreamController.java:53 (commit dcb0358).
 //   - layers: always 'major' (layers.js:28,38).
 //   - observability: always 'warning' (observability.js:54).
-//   - transactions: 'critical' (transactions.js:33) and 'major'
-//     (transactions.js:21) — the only mixed-severity rule id today.
+//   - transactions: 'critical' (transactions.js:35) and 'major'
+//     (transactions.js:23) — the only mixed-severity rule id today.
 export const RULE_CATALOG = {
   blocking: {
     short: 'Blocking calls detected inside asynchronous execution contexts.',
@@ -33,6 +36,11 @@ export const RULE_CATALOG = {
     short: 'Kafka configuration and listener anti-patterns.',
     full: 'Flags Kafka usage issues: Zookeeper-based configuration deprecated in Kafka 3.x, @KafkaListener without an explicit groupId, listeners without retry/DLQ handling, and consumer configuration missing group.id.',
     severities: ['warning'],
+  },
+  'kafka-send-timeout': {
+    short: 'Kafka send() result consumed with an unbounded blocking get().',
+    full: 'Detects a `.send(...).get()` chain with no timeout argument, in a file that imports KafkaTemplate or org.springframework.kafka. An unbounded .get() blocks the calling thread indefinitely if the broker is slow or unavailable, risking thread-pool exhaustion under sustained failure — the same shape as Java-Production-Labs SagaOrderService.java and StreamController.java before they were fixed to use .get(timeout, TimeUnit).',
+    severities: ['critical'],
   },
   layers: {
     short: 'Architectural layering violations.',

@@ -14,6 +14,7 @@ import { applySuppressions } from '../src/suppression.js';
 import { loadConfig } from '../src/config.js';
 import { RULES, RULE_FN_ALIASES } from '../src/scanner.js';
 import { checkBlocking } from '../src/rules/blocking.js';
+import { checkKafkaSendTimeout } from '../src/rules/kafka.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI = join(__dirname, '../bin/cli.js');
@@ -217,6 +218,48 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
   assert(json.issues.length === 0, 'KafkaFalsePositive.java produces 0 findings');
 }
 
+// kafka-send-timeout ─────────────────────────────────────────────────────────
+{
+  // KafkaSendTimeoutTruePositive.java has two `.send(...).get()` chains with
+  // no timeout: the real-world shape (nested parens in the payload, from
+  // SagaOrderService.java:45) and a whitespace-tolerance variant.
+  const json = runOnFixture('KafkaSendTimeoutTruePositive.java', 'kafka-send-timeout');
+  assert(json.issues.length === 2, 'KafkaSendTimeoutTruePositive.java produces exactly 2 findings (canonical + spaced variant)');
+  assert(json.issues.every(i => i.ruleId === 'kafka-send-timeout'), 'all KafkaSendTimeoutTruePositive findings have ruleId "kafka-send-timeout"');
+  assert(json.issues.every(i => i.severity === 'critical'), 'all KafkaSendTimeoutTruePositive findings are critical');
+}
+{
+  // Explicit timeout, pattern inside a comment, and the chain split across
+  // multiple lines (accepted false negative) — none of these three cases
+  // should ever be flagged.
+  const json = runOnFixture('KafkaSendTimeoutFalsePositive.java', 'kafka-send-timeout');
+  assert(json.issues.length === 0, 'KafkaSendTimeoutFalsePositive.java produces 0 findings');
+}
+{
+  // Scope gate: the exact same .send(...).get() chain shape, but the file
+  // never imports KafkaTemplate or org.springframework.kafka — checked
+  // directly against the detector function (no fixture file needed, same
+  // pattern Test 7-10 below use for suppression-gate unit checks) so this
+  // stays independent of whatever else lives in test-fixtures/.
+  const fileContexts = [
+    {
+      filePath: 'EmailService.java',
+      relativePath: 'EmailService.java',
+      lines: [
+        'package com.example.notify;',
+        '',
+        'public class EmailService {',
+        '    void notify(String msg) throws Exception {',
+        '        emailClient.send(msg).get();',
+        '    }',
+        '}',
+      ],
+    },
+  ];
+  const findings = checkKafkaSendTimeout(fileContexts);
+  assert(findings.length === 0, 'the same .send(...).get() shape in a file with no Kafka import produces 0 findings (scope gate)');
+}
+
 // layers ───────────────────────────────────────────────────────────────────
 {
   const json = runOnFixture('LayersTruePositive.java', 'layers');
@@ -305,11 +348,12 @@ console.log('\n📋 Test 5c: --rule blocking-kafka is exit 0 when nothing matche
   assert(json.issues.length === 0, '--rule blocking-kafka finds nothing in KafkaTruePositive.java (no blocking call)');
 }
 
-// ─── Test 5d: zero regression — other 4 rule ids unaffected by the post-filter ─
-console.log('\n📋 Test 5d: --rule zero regression for kafka/layers/observability/transactions');
+// ─── Test 5d: zero regression — other 5 rule ids unaffected by the post-filter ─
+console.log('\n📋 Test 5d: --rule zero regression for kafka/kafka-send-timeout/layers/observability/transactions');
 {
   for (const [fixture, rule] of [
     ['KafkaTruePositive.java', 'kafka'],
+    ['KafkaSendTimeoutTruePositive.java', 'kafka-send-timeout'],
     ['LayersTruePositive.java', 'layers'],
     ['ObservabilityTruePositive.java', 'observability'],
     ['TransactionsTruePositive.java', 'transactions'],
@@ -640,10 +684,10 @@ console.log('\n📋 Test 19: zero regression on test-fixtures/ with no config fi
   const { stdout, exitCode } = run(['--json', FIXTURES]);
   const json = JSON.parse(stdout);
 
-  assert(json.summary.critical === 5, 'summary.critical is 5 (includes the KafkaBlockingProbe.java blocking-kafka fixture)');
+  assert(json.summary.critical === 7, 'summary.critical is 7 (includes the KafkaBlockingProbe.java blocking-kafka fixture and the 2 KafkaSendTimeoutTruePositive.java findings)');
   assert(json.summary.major === 1, 'summary.major unchanged at 1');
   assert(json.summary.warning === 5, 'summary.warning unchanged at 5');
-  assert(json.summary.reported === 11 && json.summary.total === 11, 'reported === total === 11 (was 10 before the blocking-kafka fixture was added)');
+  assert(json.summary.reported === 13 && json.summary.total === 13, 'reported === total === 13 (was 11 before the kafka-send-timeout fixtures were added)');
   assert(json.summary.suppressed === 0, 'suppressed is 0 — no config file, no directives');
   assert(exitCode === 1, 'exit code is 1, unchanged — real criticals still fail the build');
 }

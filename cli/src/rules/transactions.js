@@ -1,3 +1,5 @@
+import { stripComments } from './strip-comments.js';
+
 const CONTROLLER_RES = [/@RestController\b/, /@Controller\b/];
 
 export function checkTransactions(fileContexts) {
@@ -40,14 +42,6 @@ export function checkTransactions(fileContexts) {
   }
 
   return deduplicate(findings);
-}
-
-// Strips line (//...) and block (/*...*/) comments so annotation text
-// mentioned inside a comment isn't mistaken for a real annotation.
-function stripComments(text) {
-  return text
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/.*$/gm, '');
 }
 
 function deduplicate(findings) {

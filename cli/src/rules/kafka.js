@@ -1,3 +1,5 @@
+import { stripComments } from './strip-comments.js';
+
 const ZOOKEEPER_IMAGE_RES = [
   /confluentinc\/cp-zookeeper/i,
   /bitnami\/zookeeper/i,
@@ -99,4 +101,64 @@ function deduplicate(findings) {
     seen.add(key);
     return true;
   });
+}
+
+// kafka-send-timeout — evidence: Java-Production-Labs SagaOrderService.java:45
+// (commit 01cee18) and StreamController.java:53 (commit dcb0358), both
+// `<kafkaTemplate>.send(...).get()` with no timeout, blocking the calling
+// thread indefinitely when the broker is slow/unavailable. Lab 08's benchmark
+// (already cited in this repo's README) measured a 60% request failure rate
+// under this exact pattern during a broker outage.
+//
+// Scope gate: only applied to files with evidence of being Kafka-like
+// (KafkaTemplate or org.springframework.kafka import) — deliberately not a
+// bare "any .send(...).get()" rule. Without this gate, the same chain shape
+// (EmailService.send(msg).get(), an HTTP client's .send(req).get(), etc.) is
+// indistinguishable from the Kafka case without receiver-type resolution,
+// which this regex engine doesn't have.
+const KAFKA_LIKE_RE = /\bKafkaTemplate\b|org\.springframework\.kafka/;
+
+// Requires .send(...) and .get() on the SAME line (after comment stripping),
+// with .get() taking no arguments — .get(timeout, TimeUnit) is intentionally
+// not matched. `.*` between the two calls (rather than a non-nesting
+// `[^)]*`) is deliberate: real send() calls often nest their own parens in
+// the payload, e.g. `kafka.send(topic, saved.getId().toString(), payload)`
+// (the actual SagaOrderService.java:45 shape) — a `[^)]*` argument matcher
+// would stop at the first `)` and never reach the trailing `.get()`.
+//
+// Accepted false negatives (same class of limitation blocking.js:8-11
+// documents for Future.get()/CompletableFuture.get()):
+//   - .send(...) and .get() split across multiple lines are not detected —
+//     this line-based engine has no reliable window strategy here that
+//     wouldn't also risk matching an unrelated .get() call elsewhere in the
+//     method.
+//   - .get() reached through an intermediate variable
+//     (Future<X> f = kafkaTemplate.send(...); f.get();) is not detected —
+//     confirming `f`'s declared type is a Future requires type resolution
+//     this regex-based engine doesn't have.
+const SEND_GET_NO_TIMEOUT_RE = /\.send\s*\(.*\)\s*\.\s*get\s*\(\s*\)/;
+
+export function checkKafkaSendTimeout(fileContexts) {
+  const findings = [];
+
+  for (const { filePath, lines, relativePath } of fileContexts) {
+    if (!filePath.endsWith('.java')) continue;
+
+    const content = lines.join('\n');
+    if (!KAFKA_LIKE_RE.test(content)) continue;
+
+    for (let i = 0; i < lines.length; i++) {
+      const stripped = stripComments(lines[i]);
+      if (SEND_GET_NO_TIMEOUT_RE.test(stripped)) {
+        findings.push({
+          severity: 'critical',
+          rule: 'kafka-send-timeout',
+          message: 'Kafka send().get() without timeout — blocks the calling thread indefinitely if the broker is slow or unavailable; use .get(timeout, TimeUnit) or handle the future asynchronously',
+          location: `${relativePath}:${i + 1}`,
+        });
+      }
+    }
+  }
+
+  return deduplicate(findings);
 }

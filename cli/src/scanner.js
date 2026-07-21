@@ -3,7 +3,7 @@ import { join, extname, relative, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { checkBlocking } from './rules/blocking.js';
 import { checkLayers } from './rules/layers.js';
-import { checkKafka } from './rules/kafka.js';
+import { checkKafka, checkKafkaSendTimeout } from './rules/kafka.js';
 import { checkTransactions } from './rules/transactions.js';
 import { checkObservability } from './rules/observability.js';
 import { RULE_CATALOG } from './rule-catalog.js';
@@ -30,11 +30,12 @@ const SARIF_TOOL_META = {
 // identity that the 'blocking-kafka' alias below resolves to the exact same
 // checkBlocking function as the 'blocking' entry — not a re-implementation.
 export const RULES = [
-  { id: 'blocking',      fn: checkBlocking },
-  { id: 'layers',        fn: checkLayers },
-  { id: 'kafka',         fn: checkKafka },
-  { id: 'transactions',  fn: checkTransactions },
-  { id: 'observability', fn: checkObservability },
+  { id: 'blocking',           fn: checkBlocking },
+  { id: 'layers',             fn: checkLayers },
+  { id: 'kafka',              fn: checkKafka },
+  { id: 'kafka-send-timeout', fn: checkKafkaSendTimeout },
+  { id: 'transactions',       fn: checkTransactions },
+  { id: 'observability',      fn: checkObservability },
 ];
 
 // blocking-kafka has no detector of its own — checkBlocking() (blocking.js)

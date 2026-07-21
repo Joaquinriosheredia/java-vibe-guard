@@ -7,7 +7,8 @@ parser existed, specifically so the parser and its test suite can be built
 against a fixed spec instead of ad hoc behavior.
 
 Known CLI rule ids at time of writing: `blocking`, `blocking-kafka`, `kafka`,
-`layers`, `observability`, `transactions` (see `cli/src/rules/*.js`).
+`kafka-send-timeout`, `layers`, `observability`, `transactions` (see
+`cli/src/rules/*.js`).
 
 ## 1. Canonical regex
 
@@ -69,7 +70,7 @@ trailing text produces a non-null `justification`.
 - There is no artificial limit on how many rule ids may appear in one
   directive. The regex permits unbounded repetition of the
   `(?:\s*,\s*RULE)*` group. In practice the ceiling is the number of rule ids
-  the CLI defines (currently 6), but the grammar itself does not enforce
+  the CLI defines (currently 7), but the grammar itself does not enforce
   that number.
 
 ## 5. Two directive types, defined by nature
@@ -127,8 +128,9 @@ someCall();  // vibe-guard: ignore blocking -- justified async wait
 ## 7. Invalid rule ids
 
 The parser does not validate rule ids against the rule registry
-(`blocking`, `blocking-kafka`, `kafka`, `layers`, `observability`,
-`transactions`). A directive referencing an id that matches no real rule —
+(`blocking`, `blocking-kafka`, `kafka`, `kafka-send-timeout`, `layers`,
+`observability`, `transactions`). A directive referencing an id that
+matches no real rule —
 e.g. `// vibe-guard: ignore vibe-999` — parses successfully as a
 syntactically valid directive. Since no finding will ever carry that
 `ruleId`, the directive simply never resolves anything. This is a **silent
