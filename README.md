@@ -149,7 +149,7 @@ Each rule was designed around a failure mode observed in [Java-Production-Labs](
 
 **Observed in:** *Theoretical* — no Java-Production-Labs lab directly benchmarks MDC propagation failures.
 
-**Evidence:** Theoretical until an observability lab is added. This pattern was identified and remediated in the java-vibe-guard MCP server itself (CWE-117, commit `3aa5448`) where unsanitized MDC values in `OrderController` and `SagaController` could inject newlines into structured log output.
+**Evidence:** No verified production case from Java-Production-Labs yet. Rule retained as a defensive best practice based on the documented risk of thread-pool reuse corrupting MDC context across `@Async`/`@Scheduled` executions, pending a real-world incident to confirm it in the wild.
 
 ---
 
