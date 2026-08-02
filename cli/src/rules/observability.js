@@ -1,3 +1,5 @@
+import { stripComments } from './strip-comments.js';
+
 const MAPPING_RES = [
   /@GetMapping\b/,
   /@PostMapping\b/,
@@ -21,7 +23,11 @@ export function checkObservability(fileContexts) {
   for (const { filePath, lines, relativePath } of fileContexts) {
     if (!filePath.endsWith('.java')) continue;
 
-    const content = lines.join('\n');
+    // Issue #9: strip comments before the file-level gate — a comment merely
+    // mentioning "@RestController"/"@Controller" must not open detection for
+    // a file that isn't really a controller. The per-line loop below (using
+    // raw `line`) is unaffected — out of scope.
+    const content = stripComments(lines.join('\n'));
     if (!/@RestController\b/.test(content) && !/@Controller\b/.test(content)) continue;
 
     for (let i = 0; i < lines.length; i++) {

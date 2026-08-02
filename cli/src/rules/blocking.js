@@ -1,3 +1,5 @@
+import { stripComments } from './strip-comments.js';
+
 const ASYNC_ANNOTATIONS = [
   { re: /@Scheduled\b/,    name: '@Scheduled' },
   { re: /@KafkaListener\b/, name: '@KafkaListener' },
@@ -26,8 +28,14 @@ export function checkBlocking(fileContexts) {
     // Collect positions of async annotations
     const annotatedPositions = [];
     for (let i = 0; i < lines.length; i++) {
+      // Issue #9: strip comments before the anchor test — a comment merely
+      // mentioning "@Scheduled"/"@KafkaListener"/etc. (e.g. explaining what a
+      // fixture does NOT contain) must not open a detection window. The
+      // window scan below (BLOCKING_PATTERNS) is intentionally left as-is —
+      // out of scope for this fix, see issue #9's discussion.
+      const code = stripComments(lines[i]);
       for (const { re, name } of ASYNC_ANNOTATIONS) {
-        if (re.test(lines[i])) {
+        if (re.test(code)) {
           annotatedPositions.push({ lineIdx: i, annotationName: name });
           break;
         }

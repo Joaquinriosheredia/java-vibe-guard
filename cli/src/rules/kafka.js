@@ -36,12 +36,20 @@ export function checkKafka(fileContexts) {
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      if (!/@KafkaListener\b/.test(line)) continue;
+      // Issue #9: strip comments before the anchor test — a comment merely
+      // mentioning "@KafkaListener" must not open detection here.
+      if (!/@KafkaListener\b/.test(stripComments(line))) continue;
 
-      // Collect the full annotation (may span multiple lines)
+      // Collect the full annotation (may span multiple lines). Each line is
+      // stripped INDIVIDUALLY before concatenation — stripComments() expects
+      // newline-joined input for its multiline "//" removal, but this block
+      // is space-joined (`+ ' '` below), so stripping the final concatenation
+      // would delete real code past the first "//" on any earlier line
+      // (verified empirically while designing this fix). ctx below is
+      // newline-joined instead, so it's stripped as a whole block there.
       let annotationBlock = '';
       for (let j = i; j < Math.min(i + 5, lines.length); j++) {
-        annotationBlock += lines[j] + ' ';
+        annotationBlock += stripComments(lines[j]) + ' ';
         if (lines[j].includes(')')) break;
       }
 
@@ -55,9 +63,12 @@ export function checkKafka(fileContexts) {
         });
       }
 
-      // No retry / DLQ strategy in surrounding context
+      // No retry / DLQ strategy in surrounding context. ctx is newline-joined
+      // (unlike annotationBlock above), so stripping the whole block is safe
+      // here — same pattern transactions.js already uses for its own ctx.
       const ctx = lines.slice(Math.max(0, i - 3), Math.min(i + 6, lines.length)).join('\n');
-      if (!/@RetryableTopic\b/.test(ctx) && !/@DltHandler\b/.test(ctx)) {
+      const ctxNoComments = stripComments(ctx);
+      if (!/@RetryableTopic\b/.test(ctxNoComments) && !/@DltHandler\b/.test(ctxNoComments)) {
         findings.push({
           severity: 'warning',
           rule: 'kafka',

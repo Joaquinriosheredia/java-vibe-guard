@@ -8,7 +8,15 @@ export function checkTransactions(fileContexts) {
   for (const { filePath, lines, relativePath } of fileContexts) {
     if (!filePath.endsWith('.java')) continue;
 
-    const content = lines.join('\n');
+    // Issue #9: strip comments before the file-level gate — discovered
+    // during that issue's design review that this gate had the exact same
+    // unprotected-comment defect as layers.js/observability.js, despite
+    // transactions.js being cited as the "already correct" reference (its
+    // @Async/ctx check below, lines ~30-33, was already comment-safe; this
+    // separate isController gate was not). A comment merely mentioning
+    // "@RestController"/"@Controller" must not open the Controller-method
+    // check for a class that isn't really a controller.
+    const content = stripComments(lines.join('\n'));
     const isController = CONTROLLER_RES.some(re => re.test(content));
 
     for (let i = 0; i < lines.length; i++) {

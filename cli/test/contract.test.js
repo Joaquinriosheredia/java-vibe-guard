@@ -393,6 +393,22 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
   assert(json.issues.length === 0, 'TransactionsFalsePositive.java produces 0 findings');
 }
 
+// ─── Test 5a2: comment-mention gate regression guard (issue #9) ────────────
+// CommentMentionGateProbe.java mentions every gate-opening annotation name
+// (@Scheduled/@KafkaListener/@Async/@EventListener for blocking.js/kafka.js;
+// @RestController/@Controller/@ControllerAdvice for layers.js/
+// observability.js/transactions.js) only in a comment — none are real
+// annotations anywhere in the file. Before the fix, each of these six rule
+// ids incorrectly fired on the real (but otherwise unrelated) code below the
+// comment; after the fix, every gate must stay closed. Same regression-guard
+// pattern as KafkaBlockingProbe.java for issue #7: a single dedicated
+// fixture, asserted in isolation per rule id.
+console.log('\n📋 Test 5a2: comment-mention gate regression guard (issue #9)');
+for (const rule of ['blocking', 'blocking-kafka', 'kafka', 'layers', 'observability', 'transactions']) {
+  const json = runOnFixture('CommentMentionGateProbe.java', rule);
+  assert(json.issues.length === 0, `--rule ${rule} on CommentMentionGateProbe.java produces 0 findings (issue #9)`);
+}
+
 // ─── Test 5b: --rule post-filter — blocking vs blocking-kafka (issue #7) ────
 // KafkaBlockingProbe.java produces a single blocking-kafka finding (a bare
 // .join() inside a @KafkaListener method — blocking.js:50 picks the rule id
