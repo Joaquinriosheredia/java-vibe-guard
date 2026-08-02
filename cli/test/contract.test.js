@@ -15,6 +15,7 @@ import { loadConfig } from '../src/config.js';
 import { RULES, RULE_FN_ALIASES } from '../src/scanner.js';
 import { checkBlocking } from '../src/rules/blocking.js';
 import { checkKafkaSendTimeout } from '../src/rules/kafka.js';
+import { checkReactorBlock } from '../src/rules/reactor-block.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI = join(__dirname, '../bin/cli.js');
@@ -260,6 +261,96 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
   assert(findings.length === 0, 'the same .send(...).get() shape in a file with no Kafka import produces 0 findings (scope gate)');
 }
 
+// reactor-block ────────────────────────────────────────────────────────────
+{
+  // ReactorBlockTruePositive.java mirrors mcp-server's own VIBE-002 fixture:
+  // one @Service class, 4 methods, one blocking pattern each (.block(),
+  // .blockFirst(), .blockLast(), .toFuture().get()).
+  const json = runOnFixture('ReactorBlockTruePositive.java', 'reactor-block');
+  assert(json.issues.length === 4, 'ReactorBlockTruePositive.java produces exactly 4 findings (one per blocking pattern)');
+  assert(json.issues.every(i => i.ruleId === 'reactor-block'), 'all ReactorBlockTruePositive findings have ruleId "reactor-block"');
+  assert(json.issues.every(i => i.severity === 'critical'), 'all ReactorBlockTruePositive findings are critical');
+}
+{
+  // Ported from mcp-server's ReactorBlockingFalsePositive.java: @PostConstruct,
+  // @Test, main(), a variable named "block", and a Mono-returning method that
+  // never calls .block() at all — none of these five should ever be flagged.
+  const json = runOnFixture('ReactorBlockFalsePositive.java', 'reactor-block');
+  assert(json.issues.length === 0, 'ReactorBlockFalsePositive.java produces 0 findings');
+}
+{
+  // Gate (a): same @Service + .block() shape as the true positive, but the
+  // file never imports reactor.core.publisher — the one deliberate
+  // difference from VIBE-002 (which has no import gate at all). Checked
+  // directly against the detector function, same pattern as the
+  // kafka-send-timeout scope-gate test above.
+  const fileContexts = [
+    {
+      filePath: 'NoReactorImport.java',
+      relativePath: 'NoReactorImport.java',
+      lines: [
+        'package com.example;',
+        'import org.springframework.stereotype.Service;',
+        '@Service',
+        'public class NoReactorImport {',
+        '    public String get() {',
+        '        return someClient.fetch().block();',
+        '    }',
+        '}',
+      ],
+    },
+  ];
+  const findings = checkReactorBlock(fileContexts);
+  assert(findings.length === 0, 'the same .block() shape with no reactor.core.publisher import produces 0 findings (import gate)');
+}
+{
+  // Gate (c): Reactor import present, but the class carries none of
+  // @RestController/@Service/@Component — the class-level anchor inherited
+  // from VIBE-002.
+  const fileContexts = [
+    {
+      filePath: 'NoClassAnchor.java',
+      relativePath: 'NoClassAnchor.java',
+      lines: [
+        'package com.example;',
+        'import reactor.core.publisher.Mono;',
+        'public class NoClassAnchor {',
+        '    public String get() {',
+        '        return Mono.just("x").block();',
+        '    }',
+        '}',
+      ],
+    },
+  ];
+  const findings = checkReactorBlock(fileContexts);
+  assert(findings.length === 0, 'the same .block() shape with no @RestController/@Service/@Component anchor produces 0 findings (class-anchor gate)');
+}
+{
+  // Additional case: a generic .toFuture().get() shape with no Reactor
+  // import — confirms reactor-block's .toFuture().get() detection is
+  // strictly gated behind the Reactor import too (not a bare Future.get()
+  // detector), and stays fully separate from blocking.js, which never
+  // detects Future.get()/CompletableFuture.get() at all (blocking.js:8-11).
+  const fileContexts = [
+    {
+      filePath: 'GenericToFuture.java',
+      relativePath: 'GenericToFuture.java',
+      lines: [
+        'package com.example;',
+        'import org.springframework.stereotype.Service;',
+        '@Service',
+        'public class GenericToFuture {',
+        '    public String get() throws Exception {',
+        '        return someClient.fetch().toFuture().get();',
+        '    }',
+        '}',
+      ],
+    },
+  ];
+  const findings = checkReactorBlock(fileContexts);
+  assert(findings.length === 0, 'a .toFuture().get() shape with no reactor.core.publisher import produces 0 findings');
+}
+
 // layers ───────────────────────────────────────────────────────────────────
 {
   const json = runOnFixture('LayersTruePositive.java', 'layers');
@@ -357,6 +448,7 @@ console.log('\n📋 Test 5d: --rule zero regression for kafka/kafka-send-timeout
     ['LayersTruePositive.java', 'layers'],
     ['ObservabilityTruePositive.java', 'observability'],
     ['TransactionsTruePositive.java', 'transactions'],
+    ['ReactorBlockTruePositive.java', 'reactor-block'],
   ]) {
     const json = runOnFixture(fixture, rule);
     assert(json.issues.length > 0, `--rule ${rule} on ${fixture} still finds its expected finding(s)`);
@@ -684,10 +776,10 @@ console.log('\n📋 Test 19: zero regression on test-fixtures/ with no config fi
   const { stdout, exitCode } = run(['--json', FIXTURES]);
   const json = JSON.parse(stdout);
 
-  assert(json.summary.critical === 7, 'summary.critical is 7 (includes the KafkaBlockingProbe.java blocking-kafka fixture and the 2 KafkaSendTimeoutTruePositive.java findings)');
+  assert(json.summary.critical === 11, 'summary.critical is 11 (was 7: KafkaBlockingProbe.java blocking-kafka + 2 KafkaSendTimeoutTruePositive.java + 4 new ReactorBlockTruePositive.java findings)');
   assert(json.summary.major === 1, 'summary.major unchanged at 1');
   assert(json.summary.warning === 5, 'summary.warning unchanged at 5');
-  assert(json.summary.reported === 13 && json.summary.total === 13, 'reported === total === 13 (was 11 before the kafka-send-timeout fixtures were added)');
+  assert(json.summary.reported === 17 && json.summary.total === 17, 'reported === total === 17 (was 13 before the reactor-block fixtures were added)');
   assert(json.summary.suppressed === 0, 'suppressed is 0 — no config file, no directives');
   assert(exitCode === 1, 'exit code is 1, unchanged — real criticals still fail the build');
 }

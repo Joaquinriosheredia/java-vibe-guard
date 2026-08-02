@@ -6,6 +6,7 @@ import { checkLayers } from './rules/layers.js';
 import { checkKafka, checkKafkaSendTimeout } from './rules/kafka.js';
 import { checkTransactions } from './rules/transactions.js';
 import { checkObservability } from './rules/observability.js';
+import { checkReactorBlock } from './rules/reactor-block.js';
 import { RULE_CATALOG } from './rule-catalog.js';
 import { printHeader, printFindings, printSummary, printJSON } from './reporter.js';
 import { applySuppressions } from './suppression.js';
@@ -36,6 +37,7 @@ export const RULES = [
   { id: 'kafka-send-timeout', fn: checkKafkaSendTimeout },
   { id: 'transactions',       fn: checkTransactions },
   { id: 'observability',      fn: checkObservability },
+  { id: 'reactor-block',      fn: checkReactorBlock },
 ];
 
 // blocking-kafka has no detector of its own — checkBlocking() (blocking.js)

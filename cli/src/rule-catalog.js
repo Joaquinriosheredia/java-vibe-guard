@@ -10,7 +10,7 @@
 // same rank sarif.js's SEVERITY_RANK and reporter.js's SEVERITY_ORDER use).
 // Hand-maintained: if cli/src/rules/*.js ever changes what severity a rule
 // id emits, this array must be updated here too — nothing enforces the two
-// staying in sync automatically. Evidence for the seven values below:
+// staying in sync automatically. Evidence for the eight values below:
 //   - blocking / blocking-kafka: always 'critical' (blocking.js:49, one
 //     shared findings.push call site for both rule ids).
 //   - kafka: always 'warning' (kafka.js:22,51,62,80 — all four call sites).
@@ -19,6 +19,14 @@
 //     (commit 01cee18) and StreamController.java:53 (commit dcb0358).
 //   - layers: always 'major' (layers.js:28,38).
 //   - observability: always 'warning' (observability.js:54).
+//   - reactor-block: always 'critical' (reactor-block.js, two findings.push
+//     call sites, both 'critical'). New rule — faithful CLI port of the MCP
+//     server's VIBE-002 (ReactorBlockingCallRule.java), plus a Reactor-import
+//     file gate the Java original doesn't have. Evidence: README.md "Found
+//     in the Wild" Finding 2, FileContentSearchService.java
+//     (eugenp/tutorials), .block() inside .map() on a Schedulers.parallel()
+//     worker — a shape blocking.js does not detect (no @Scheduled/@Async/
+//     @EventListener/@KafkaListener annotation present).
 //   - transactions: 'critical' (transactions.js:35) and 'major'
 //     (transactions.js:23) — the only mixed-severity rule id today.
 export const RULE_CATALOG = {
@@ -51,6 +59,11 @@ export const RULE_CATALOG = {
     short: 'Missing structured logging on request-handling endpoints.',
     full: 'Detects endpoints that lack structured logging, reducing the ability to trace and diagnose request behavior in production.',
     severities: ['warning'],
+  },
+  'reactor-block': {
+    short: 'Reactive blocking call (.block()/.blockFirst()/.blockLast()/.toFuture().get()) inside a Spring bean.',
+    full: 'Detects .block(), .blockFirst(), .blockLast(), or .toFuture().get() inside a class annotated @RestController, @Service, or @Component, in a file that imports reactor.core.publisher — the CLI port of the MCP server\'s VIBE-002 (ReactorBlockingCallRule). Excludes @Test, @PostConstruct, and main() methods. Blocking a Reactor pipeline pins the calling thread (e.g. a Schedulers.parallel() worker or the Netty event loop) for the full I/O duration, causing throughput collapse under load — see README "Found in the Wild" Finding 2 (FileContentSearchService.java, eugenp/tutorials).',
+    severities: ['critical'],
   },
   transactions: {
     short: 'Transactional-boundary and rollback anti-patterns.',

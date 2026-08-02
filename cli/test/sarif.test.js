@@ -77,7 +77,7 @@ function collectAllKeys(value, keys = new Set()) {
 }
 
 // ─── Shared fixture ───────────────────────────────────────────────────────────
-// One finding per known rule id (docs/suppression-grammar.md's seven), plus
+// One finding per known rule id (docs/suppression-grammar.md's eight), plus
 // one suppressed and one baselined finding to exercise §5 filtering, plus the
 // real file-level kafka.js case (cli/src/rules/kafka.js:79-89) for §4. The
 // `transactions` rule id gets two findings at different severities (major +
@@ -130,6 +130,12 @@ const fixtureFindings = [
     severity: 'warning',
     message: 'Endpoint without structured logging',
     location: 'src/main/java/com/example/OrderController.java:58',
+  }),
+  finding({
+    rule: 'reactor-block',
+    severity: 'critical',
+    message: "Reactive blocking call '.block()' inside Spring bean — pins a thread under load; use reactive composition (.flatMap, .map, .then) instead",
+    location: 'src/main/java/com/example/search/FileContentSearchService.java:12',
   }),
   finding({
     rule: 'kafka',
@@ -229,7 +235,7 @@ console.log('\n📋 §5: filtering — SARIF results come only from visibleFindi
 {
   const visible = filterVisibleFindings(fixtureFindings);
 
-  assert(visible.length === 8, `8 of 10 fixture findings are visible (2 excluded): got ${visible.length}`);
+  assert(visible.length === 9, `9 of 11 fixture findings are visible (2 excluded): got ${visible.length}`);
   assert(
     visible.every(f => !f.suppressed),
     'no suppressed finding survives filterVisibleFindings'
@@ -249,7 +255,7 @@ console.log('\n📋 §5: filtering — SARIF results come only from visibleFindi
 
   const doc = generateSarif(fixtureFindings, TOOL_META);
   const results = doc.runs[0].results;
-  assert(results.length === 8, `generated SARIF has exactly 8 results, matching visibleFindings: got ${results.length}`);
+  assert(results.length === 9, `generated SARIF has exactly 9 results, matching visibleFindings: got ${results.length}`);
   assert(
     !results.some(r => r.locations[0].physicalLocation.artifactLocation.uri.includes('LegacyConsumer.java')),
     'suppressed finding never reaches results[]'
@@ -268,7 +274,7 @@ console.log('\n📋 §6: rules array — one entry per distinct ruleId, mixed-se
   const ruleIds = rules.map(r => r.id).sort();
 
   assert(
-    ruleIds.join(',') === ['blocking', 'blocking-kafka', 'kafka', 'kafka-send-timeout', 'layers', 'observability', 'transactions'].sort().join(','),
+    ruleIds.join(',') === ['blocking', 'blocking-kafka', 'kafka', 'kafka-send-timeout', 'layers', 'observability', 'reactor-block', 'transactions'].sort().join(','),
     `one reportingDescriptor per distinct ruleId present in visibleFindings: got ${ruleIds.join(',')}`
   );
 
@@ -380,7 +386,7 @@ console.log('\n📋 §9: no-goals not emitted — deferred fields absent anywher
   assert(!('category' in doc.runs[0]), 'the run object carries no category field');
 
   assert(
-    results.length === 8 && results.length === fixtureFindings.filter(f => !f.suppressed && !f.baselined).length,
+    results.length === 9 && results.length === fixtureFindings.filter(f => !f.suppressed && !f.baselined).length,
     'sanity check — the document under test actually has results to sweep, not an empty array that would trivially pass'
   );
 }

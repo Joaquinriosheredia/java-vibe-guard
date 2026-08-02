@@ -104,10 +104,10 @@ console.log('\n📋 §4: multiple rule ids');
   const dupe = parseSuppressionDirectives(['x(); // vibe-guard: ignore blocking,blocking']);
   assert(ruleIdsOf(dupe[0]).length === 1, 'duplicate rule id in the same list collapses to one (Set dedup)');
 
-  const all7 = parseSuppressionDirectives([
-    'x(); // vibe-guard: ignore blocking,blocking-kafka,kafka,kafka-send-timeout,layers,observability,transactions',
+  const all8 = parseSuppressionDirectives([
+    'x(); // vibe-guard: ignore blocking,blocking-kafka,kafka,kafka-send-timeout,layers,observability,reactor-block,transactions',
   ]);
-  assert(ruleIdsOf(all7[0]).length === 7, 'no artificial limit — all 7 known rule ids accepted in one directive');
+  assert(ruleIdsOf(all8[0]).length === 8, 'no artificial limit — all 8 known rule ids accepted in one directive');
 }
 
 // ─── §5: directive type determined by nature, not position ─────────────────

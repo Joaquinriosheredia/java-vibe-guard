@@ -7,8 +7,8 @@ parser existed, specifically so the parser and its test suite can be built
 against a fixed spec instead of ad hoc behavior.
 
 Known CLI rule ids at time of writing: `blocking`, `blocking-kafka`, `kafka`,
-`kafka-send-timeout`, `layers`, `observability`, `transactions` (see
-`cli/src/rules/*.js`).
+`kafka-send-timeout`, `layers`, `observability`, `reactor-block`,
+`transactions` (see `cli/src/rules/*.js`).
 
 ## 1. Canonical regex
 
@@ -129,7 +129,7 @@ someCall();  // vibe-guard: ignore blocking -- justified async wait
 
 The parser does not validate rule ids against the rule registry
 (`blocking`, `blocking-kafka`, `kafka`, `kafka-send-timeout`, `layers`,
-`observability`, `transactions`). A directive referencing an id that
+`observability`, `reactor-block`, `transactions`). A directive referencing an id that
 matches no real rule —
 e.g. `// vibe-guard: ignore vibe-999` — parses successfully as a
 syntactically valid directive. Since no finding will ever carry that

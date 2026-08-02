@@ -55,6 +55,7 @@ therefore adds one field per entry:
   'kafka-send-timeout': { short, full, severities: ['critical'] },
   layers:              { short, full, severities: ['major'] },
   observability:       { short, full, severities: ['warning'] },
+  'reactor-block':     { short, full, severities: ['critical'] },
   transactions:        { short, full, severities: ['critical', 'major'] },
 }
 ```
@@ -79,6 +80,14 @@ every distinct severity that rule id's `findings.push(...)` call sites in
   indefinitely under broker slowness/unavailability.
 - `layers`: always `major` (`cli/src/rules/layers.js:28,38`).
 - `observability`: always `warning` (`cli/src/rules/observability.js:54`).
+- `reactor-block`: always `critical` (`cli/src/rules/reactor-block.js`, two
+  `findings.push(...)` call sites, both `critical`). New rule — faithful CLI
+  port of the MCP server's VIBE-002 (`ReactorBlockingCallRule.java`), gated
+  additionally on a `reactor.core.publisher` import (not present in the
+  Java original). Evidence: README.md "Found in the Wild" Finding 2,
+  `FileContentSearchService.java` (`eugenp/tutorials`) — a `.block()` call
+  with none of `blocking.js`'s four anchor annotations
+  (`@Scheduled`/`@Async`/`@EventListener`/`@KafkaListener`) present.
 - `transactions`: **both** `critical` and `major`
   (`cli/src/rules/transactions.js:23-24` emits `major`, `:35-36` emits
   `critical`) — the only mixed-severity rule id today.
@@ -92,22 +101,23 @@ no mechanism ties two independently-maintained locations together).
 
 ## 3. Valid rule ids
 
-The seven real values that appear in `finding.rule` across
+The eight real values that appear in `finding.rule` across
 `cli/src/rules/*.js`, in the canonical order already established in
 `docs/suppression-grammar.md`:
 
 ```
-blocking, blocking-kafka, kafka, kafka-send-timeout, layers, observability, transactions
+blocking, blocking-kafka, kafka, kafka-send-timeout, layers, observability, reactor-block, transactions
 ```
 
-`RULES` (`cli/src/scanner.js:29-39`) — the array of detector functions —
-now has 6 entries, one per rule-check function (`kafka-send-timeout` got
-its own detector, `checkKafkaSendTimeout`, unlike `blocking-kafka` below);
-that is still unrelated to id *validation*. `--rule`'s unknown-rule check
-(`cli/src/scanner.js:76`) derives its valid-id list from `RULE_CATALOG`
-the same way `--explain` does (`VALID_RULE_IDS = Object.keys(RULE_CATALOG)`,
-mirroring `explain.js`'s `RULE_IDS`), so both flags now validate against
-the same 7-id list. `blocking-kafka` has no detector of its own — `checkBlocking()`
+`RULES` (`cli/src/scanner.js:29-40`) — the array of detector functions —
+now has 7 entries, one per rule-check function (`kafka-send-timeout` and
+`reactor-block` each got their own detector, `checkKafkaSendTimeout` and
+`checkReactorBlock`, unlike `blocking-kafka` below); that is still unrelated
+to id *validation*. `--rule`'s unknown-rule check (`cli/src/scanner.js:76`)
+derives its valid-id list from `RULE_CATALOG` the same way `--explain` does
+(`VALID_RULE_IDS = Object.keys(RULE_CATALOG)`, mirroring `explain.js`'s
+`RULE_IDS`), so both flags now validate against the same 8-id list.
+`blocking-kafka` has no detector of its own — `checkBlocking()`
 emits both `blocking` and `blocking-kafka` findings from one pass — so
 `--rule blocking-kafka` executes `checkBlocking()` via an explicit alias
 and then narrows the result to `finding.rule === 'blocking-kafka'` in a
@@ -203,7 +213,7 @@ existing precedent over the other, not "the" precedent:
   quotes around the offending value, matching `--verify`'s wording, not
   `--rule`'s quoted-value wording):
   ```
-  Unknown rule: X. Available: blocking, blocking-kafka, kafka, kafka-send-timeout, layers, observability, transactions
+  Unknown rule: X. Available: blocking, blocking-kafka, kafka, kafka-send-timeout, layers, observability, reactor-block, transactions
   ```
   where `X` is the raw value passed to `--explain`, unmodified (not
   lowercased, not trimmed beyond what commander itself does to argument
@@ -213,7 +223,7 @@ Worked example:
 
 ```
 $ node bin/cli.js --explain nonexistent-xyz
-Unknown rule: nonexistent-xyz. Available: blocking, blocking-kafka, kafka, kafka-send-timeout, layers, observability, transactions
+Unknown rule: nonexistent-xyz. Available: blocking, blocking-kafka, kafka, kafka-send-timeout, layers, observability, reactor-block, transactions
 ```
 Exit code: `2`.
 
@@ -226,7 +236,7 @@ no "did you mean" suggestion, no partial credit.
 
 ```
 $ node bin/cli.js --explain Blocking
-Unknown rule: Blocking. Available: blocking, blocking-kafka, kafka, kafka-send-timeout, layers, observability, transactions
+Unknown rule: Blocking. Available: blocking, blocking-kafka, kafka, kafka-send-timeout, layers, observability, reactor-block, transactions
 ```
 Exit code: `2` — identical in every respect (message shape, stream, exit
 code) to any other non-matching value; `Blocking` is not treated
@@ -277,7 +287,7 @@ same as `--verify`, `--explain` short-circuits before the
   `--explain <rule>`, one rule id in, plain text out, nothing else.
 - ~~**Fixing `--rule`'s rejection of `blocking-kafka`**~~ — was tracked
   separately as issue #7; now fixed. `--rule` validates against
-  `RULE_CATALOG`'s 7-id list, same as `--explain` (§3), and
+  `RULE_CATALOG`'s 8-id list, same as `--explain` (§3), and
   `--rule blocking-kafka` filters findings to exactly that ruleId.
 
 ## 10. Status

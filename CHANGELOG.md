@@ -68,3 +68,44 @@ unbounded blocking `.get()`.
   `kafka`, `layers`, `observability`, `transactions`). All downstream
   consumers — `--explain`, `--rule` validation, SARIF output,
   suppression grammar, and their docs — updated to the same 7-id list.
+
+## New rule: reactor-block
+
+Added a new CLI rule (Layer 2), a faithful port of the MCP server's
+VIBE-002 (`ReactorBlockingCallRule.java`) — closing the gap the
+Found-in-the-Wild investigation identified: `blocking.js` only detects
+blocking calls anchored to `@Scheduled`/`@Async`/`@EventListener`/
+`@KafkaListener`, and never fires on a `.block()` inside an
+unannotated reactive method chain.
+
+- New rule `reactor-block`, severity `critical`. Detects `.block()`,
+  `.blockFirst()`, `.blockLast()`, or `.toFuture().get()` inside a
+  class annotated `@RestController`, `@Service`, or `@Component`,
+  excluding `@Test`, `@PostConstruct`, and `main()` methods — same
+  class/method anchoring as VIBE-002, ported using a brace-depth state
+  machine (`cli/src/rules/reactor-block.js`) instead of `blocking.js`'s
+  fixed-line-window approach, because the class-level anchor must stay
+  in scope across every method in the class, not just a window after
+  the annotation.
+- One deliberate difference from the MCP original: gated on the file
+  importing `reactor.core.publisher` (explicit or wildcard), checked
+  once before the class/method tracking begins. Without it, a
+  `.block()`/`.blockFirst()`/`.blockLast()` call on some unrelated,
+  non-Reactor API inside any `@Service`/`@RestController`/`@Component`
+  would also match — a false-positive class the single-file MCP tool
+  call didn't have to guard against.
+- Evidence: README's "Found in the Wild" Finding 2 —
+  `FileContentSearchService.java` (`eugenp/tutorials`,
+  `spring-reactive-modules`), `.block()` inside `.map()` on a
+  `Schedulers.parallel()` worker, with none of `blocking.js`'s four
+  anchor annotations present.
+- Accepted false negatives, same class of limitation already
+  documented for other rules in this regex-based engine: Reactor used
+  via a static import or a bare `Publisher<T>` type with no direct
+  `reactor.core.publisher` import; and VIBE-002's own pre-existing
+  limitation around nested lambdas/private methods not tracked by the
+  brace-depth counter.
+- Registered in `RULE_CATALOG` and `RULES` (`scanner.js`), bringing
+  the CLI to 8 total rule ids (was 7). All downstream consumers —
+  `--explain`, `--rule` validation, SARIF output, suppression grammar,
+  and their docs — updated to the same 8-id list.

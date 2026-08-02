@@ -175,8 +175,8 @@ is no SARIF-native trace of it (no `suppressions` object, no
 One entry per distinct rule id that appears among `visibleFindings` in
 the current run. Known rule ids today (`cli/src/rules/*.js`): `blocking`,
 `blocking-kafka`, `kafka`, `kafka-send-timeout`, `layers`, `observability`,
-`transactions` (the same seven enumerated in `docs/suppression-grammar.md`
-§0/§7).
+`reactor-block`, `transactions` (the same eight enumerated in
+`docs/suppression-grammar.md` §0/§7).
 
 | Field | Value |
 |---|---|
