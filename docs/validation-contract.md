@@ -53,6 +53,13 @@ each added deliberately, not inherited wholesale. This mirrors issue #4's
 own proposal: "even if it initially covers only a small number of
 repositories."
 
+**Default behavior:** each manifest entry represents the repository root.
+An optional `path` field is reserved for future use if a repository
+cannot reasonably be validated from its root (for example, due to
+repository layout or excessive unrelated content). This field is
+intentionally omitted from the initial schema until a real use case is
+demonstrated.
+
 ---
 
 ## 2. Fixed commits/tags vs. moving branches
@@ -63,15 +70,18 @@ repositories."
 | Maintenance | Needs a deliberate, occasional "bump" PR | Zero — always current |
 | Failure mode | Repo/commit could vanish (force-push, deletion) | Silent drift — a finding-count change could be upstream code changing, not a CLI regression |
 
-**Recommendation:** pin exact commit SHAs (tags where the upstream repo
-tags releases, SHA otherwise), stored in a versioned manifest, e.g.
-`validation/repos.json`, checked into the repo. Bumping a pin is a
-conscious, reviewed change — not something that happens as a side effect
-of upstream activity. This directly enables the reproducibility criterion
-in §5.
+**Decision (final):** the manifest pins an exact commit SHA per repo —
+never a branch, and never a tag name stored as-is (a tag reference can be
+re-pointed upstream; if a release tag is used to *select* a commit, the
+manifest stores the SHA that tag resolved to at selection time, not the
+tag). This is stored in a versioned manifest, `validation/repos.json`,
+checked into the repo. Bumping a pin is a conscious, reviewed change —
+not something that happens as a side effect of upstream activity. This
+directly enables the reproducibility criterion in §5.
 
-This is a recommendation, not a closed decision — confirm before
-implementation.
+**Updating a pinned commit is a deliberate validation event, not
+routine maintenance.** A commit is only updated after rerunning the
+public validation and reviewing the resulting metrics.
 
 **Open question — update cadence not yet defined:** this contract
 recommends *what* to pin, but not *when* the manifest should be bumped.
@@ -270,12 +280,15 @@ implementation, same as the rest of this contract.
 ## Open points requiring confirmation before implementation
 
 1. Final repo list beyond `eugenp/tutorials` + `spring-petclinic` (§1).
-2. Pinned commits vs. branches (§2) — recommended, not decided.
-3. Fate of the existing untracked `validation/results.md` (§3).
-4. Exact README wording/placement replacing the current "Validation"
+2. Fate of the existing untracked `validation/results.md` (§3).
+3. Exact README wording/placement replacing the current "Validation"
    section (does not touch "Found in the Wild" — see §4).
-5. Manifest update cadence: reactive (tied to rule changes) vs.
+4. Manifest update cadence: reactive (tied to rule changes) vs.
    discretionary/periodic (§2) — currently undefined.
-6. Trigger for `validate-public` itself: manual (with named owner +
+5. Trigger for `validate-public` itself: manual (with named owner +
    cadence) vs. CI on schedule vs. CI on release, and whether a
    reproducibility break (§5) hard-fails CI or only warns (§8).
+
+**Resolved:** pinned commits vs. moving branches (§2) — closed 2026-08-04.
+The manifest pins exact commit SHAs only; see the "Decision (final)"
+paragraph in §2.
