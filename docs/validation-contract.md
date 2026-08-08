@@ -277,6 +277,169 @@ implementation, same as the rest of this contract.
 
 ---
 
+## 9. `fetch-repo.js` — input validation and Git execution contract
+
+**Status: resolved (2026-08-08).** This closes the last open point of the
+`fetch-repo.js` module design (the `{repo, commit}` → checkout module
+described but not yet implemented — no code exists for it yet). It fixes
+the exact validation regexes and the Git-invocation safety rules that
+implementation must follow.
+
+### 9.1 Input validation
+
+**`commit`**
+- Must match exactly 40 lowercase hexadecimal characters.
+- Regex: `/^[0-9a-f]{40}$/`
+- Anything else — wrong length, uppercase hex, non-hex characters — is
+  `invalid-input`. Uppercase SHAs are rejected even though they identify
+  the same commit, because §2 above commits `repos.json` to storing
+  pinned SHAs in one canonical form; accepting case variants would let
+  two manifest entries reference the "same" commit in different textual
+  forms, silently.
+
+Accepted:
+- `ccab8a758d1f1f5043f897548f85a74f88d904fb` (the pinned `eugenp/tutorials`
+  SHA already in `repos.json`)
+
+Rejected (`invalid-input`):
+- `ccab8a758d1f1f5043f897548f85a74f88d904f` — 39 chars, one short
+- `ccab8a758d1f1f5043f897548f85a74f88d904fbb` — 41 chars, one long
+- `CCAB8A758D1F1F5043F897548F85A74F88D904FB` — uppercase
+- `ccab8a758d1f1f5043f897548f85a74f88d904fg` — contains `g`, non-hex
+
+**`repo`**
+- Must match exactly `owner/name`.
+- `owner` and `name` each: characters from `[A-Za-z0-9.-]` only, must
+  start and end with `[A-Za-z0-9]` (never `.` or `-` at either edge).
+- Exactly one `/` separating them.
+- Regex:
+  `/^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\/[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/`
+
+The regex is a pure allowlist — it enumerates the characters permitted,
+rather than blocking specific dangerous ones. A blocklist has to name
+every dangerous character (space, backslash, control characters, `:`,
+`@`, a second `/`, …) and stays correct only as long as none is missed;
+an allowlist restricted to `[A-Za-z0-9.-]` plus one literal `/` makes
+every one of those impossible by construction, including ones not
+explicitly considered. It also makes a leading `-` in either component
+impossible (both components are anchored to start with `[A-Za-z0-9]`),
+which is the specific defense against option injection this section
+requires.
+
+Accepted:
+- `eugenp/tutorials`
+- `spring-projects/spring-petclinic`
+- `a/b` — single-character owner/name; the regex's optional inner group
+  correctly allows this
+
+Rejected (`invalid-input`):
+- `eugenp` — no `/`
+- `eugenp/foo/tutorials` — a second `/` (not part of either component's
+  allowed charset)
+- `-eugenp/tutorials` — starts with `-`
+- `eugenp/-tutorials` — `name` starts with `-` (same defense, extended to
+  both components, not just the whole string)
+- `eugenp /tutorials`, `eugenp/tutorials ` — contains a space
+- `eugenp!/tutorials`, `eugenp/tutorials;rm` — characters outside
+  `[A-Za-z0-9.-]`
+- `https://github.com/eugenp/tutorials` — colon and extra `/` outside the
+  allowed shape
+- `eugenp\tutorials` — backslash, not in the allowed charset
+
+Both regexes are anchored (`^…$`), matched against the whole string, and
+use no nested/overlapping quantifiers — no catastrophic-backtracking
+(ReDoS) risk from adversarial input length.
+
+No maximum length is enforced, and GitHub's own naming rules (owner ≤39
+chars, no consecutive hyphens, etc.) are not replicated. This validation
+exists to make the value **safe to hand to a subprocess**, not to fully
+validate it as a real GitHub identifier. A syntactically-safe but
+nonexistent `owner/name` is caught downstream as `repo-not-found` when
+Git actually tries to reach it — an already-designed failure path, not a
+gap.
+
+### 9.2 Git execution contract
+
+- Every Git invocation uses `spawnSync('git', [...argsArray], opts)` with
+  arguments passed as an array. `shell: true` is never passed, and no
+  Git invocation goes through `exec`/`execSync` or any API that
+  assembles a single command string.
+- No value derived from `repo` or `commit` is ever concatenated into a
+  string that is itself interpreted as a shell command or as a single
+  Git argument containing multiple tokens — always separate array
+  elements, never string interpolation.
+- `repo` and `commit` are validated against §9.1 **before** any Git
+  argument array is constructed. If either fails validation, the
+  function returns `{status:'error', errorType:'invalid-input', ...}`
+  immediately — no subprocess is spawned.
+- `--` (end-of-options) is used as defense-in-depth wherever a Git
+  subcommand's option parser accepts it unambiguously — on top of, not
+  instead of, §9.1's allowlist, which remains the primary control:
+
+| Step | Command | `--` used? | Why |
+|---|---|---|---|
+| 1 | `git init <checkoutDir>` | no | `<checkoutDir>` is generated internally (`mkdtempSync`), never derived from `repo`/`commit` — nothing to protect |
+| 2 | `git remote add -- origin <url>` | yes | `<url>` is built from the validated `repo`; `--` separates `remote add`'s options from its two positional arguments (name, url) |
+| 3 | `git fetch --depth 1 -- origin <commit>` | yes | `<commit>` is the validated SHA; `--` separates `fetch`'s options from the repository/refspec positional arguments |
+| 4 | `git checkout FETCH_HEAD` | **no, deliberately** | `FETCH_HEAD` is a fixed literal, not derived from input — nothing to protect. Prepending `--` here would also be wrong: for `checkout`, `--` changes an argument's meaning from "revision" to "pathspec," breaking the command instead of hardening it |
+
+Step 4 is also why this design checks out `FETCH_HEAD` rather than the
+raw `commit` SHA directly: it removes the one Git call where an
+attacker-influenceable value would otherwise sit in the one position
+where `--` cannot safely be added.
+
+**Resolved (2026-08-08):** whether `git remote add` and `git fetch`
+actually honor `--` as documented (`parse-options`-style end-of-options)
+was verified empirically against Git 2.43.0, the version this project
+runs against, in an isolated scratch directory (no clone of any repo in
+`repos.json`):
+- `git remote add -- origin <url>` — exit 0, remote created as `origin`
+  (not `--`).
+- `git fetch --depth 1 -- origin <sha>` — exit 0, `FETCH_HEAD` resolves
+  exactly to the requested SHA.
+- Both produced identical results to the equivalent commands without
+  `--`, confirming `--` is purely additive here and does not change
+  behavior on this Git version.
+
+No further verification action is required before implementation.
+
+### 9.3 Contract tests for §9.1 (design only — not yet implemented)
+
+No network, no subprocess involved — these assert only what §9.1's two
+regexes accept or reject, so they run as part of the fast, offline unit
+suite alongside the rest of `fetch-repo.js`'s planned tests.
+
+| # | Input | Field | Expected |
+|---|---|---|---|
+| 1 | `ccab8a758d1f1f5043f897548f85a74f88d904fb` | `commit` | valid |
+| 2 | `ccab8a758d1f1f5043f897548f85a74f88d904f` (39 chars) | `commit` | `invalid-input` — too short |
+| 3 | `ccab8a758d1f1f5043f897548f85a74f88d904fbb` (41 chars) | `commit` | `invalid-input` — too long |
+| 4 | `ccab8a758d1f1f5043f897548f85a74f88d904fg` (contains `g`) | `commit` | `invalid-input` — non-hex character |
+| 5 | `eugenp/tutorials` | `repo` | valid |
+| 6 | `eugenp` | `repo` | `invalid-input` — no `/` |
+| 7 | `eugenp/foo/tutorials` | `repo` | `invalid-input` — multiple `/` |
+| 8 | `-eugenp/tutorials` | `repo` | `invalid-input` — starts with `-` |
+| 9 | `eugenp /tutorials` | `repo` | `invalid-input` — contains a space |
+| 10 | `eugenp!/tutorials` | `repo` | `invalid-input` — character outside `[A-Za-z0-9.-]` |
+| 11 | `https://github.com/eugenp/tutorials` | `repo` | `invalid-input` — full URL, not `owner/name` |
+
+Two cases beyond the requested list, added to fully exercise the "must
+also *end* with `[A-Za-z0-9]`" half of the rule (not just "must start
+with"), which is otherwise untested by the list above:
+
+| # | Input | Field | Expected |
+|---|---|---|---|
+| 12 | `eugenp/tutorials-` | `repo` | `invalid-input` — `name` ends with `-` |
+| 13 | `eugenp./tutorials` | `repo` | `invalid-input` — `owner` ends with `.` |
+
+Each case also implicitly asserts the corresponding no-subprocess-spawned
+behavior already specified in the `fetch-repo.js` API design: validation
+happens before any `git` argument array is built, so an `invalid-input`
+result must be producible with `git` entirely absent from `PATH` (i.e.
+these tests need no working Git installation to pass).
+
+---
+
 ## Open points requiring confirmation before implementation
 
 1. Final repo list beyond `eugenp/tutorials` + `spring-petclinic` (§1).
