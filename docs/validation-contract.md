@@ -170,9 +170,52 @@ identical numbers** on every run, on any machine.
 
 **Acceptance criterion:** running the command twice against the same
 inputs produces byte-identical JSON artifacts (§3), modulo an explicitly
-excluded set of fields (timestamp, wall-clock duration). Any other diff
-between two runs is a bug. This should be checkable in CI by running the
-command twice and diffing normalized output.
+excluded set of fields — **exactly three, by nature, never normalized**
+because they measure the run itself, not its content:
+- `timestamp` (top-level, run-repo.js's own run metadata)
+- `durationMs` (top-level, wall-clock time)
+- `scan.timestamp` (nested — the CLI's own `--format json` output stamps
+  its own timestamp independently; same reason as the top-level one)
+
+Any other diff between two runs is a bug. This should be checkable in CI
+by running the command twice and diffing normalized output.
+
+**Two further non-determinism sources exist in the underlying scan
+output, but neither is handled by exclusion — both are resolved by
+active normalization inside `run-repo.js`, so the persisted artifact is
+reproducible at the source, not just "ignored when diffing":**
+
+- **`scan.projectPath`:** the CLI is invoked with `checkoutPath`, a fresh
+  `mkdtemp` path fetch-repo.js never reuses (§4.5) — different on every
+  run by construction. `run-repo.js` overwrites this field with the
+  stable manifest slug (the `repo` value, e.g. `"eugenp/tutorials"`)
+  before returning its result.
+- **`scan.issues[]` order:** `collectFiles()`
+  (`cli/src/scanner.js:60-75`) does not sort directory entries
+  ([issue #10](https://github.com/Joaquinriosheredia/java-vibe-guard/issues/10),
+  filed, open, intentionally **not** fixed by this contract or by
+  `run-repo.js` — the root cause is shared by every CLI entry point, not
+  specific to validation). Two independent checkouts of the identical
+  commit can therefore yield `issues[]` in different array order, purely
+  from filesystem/OS directory-entry ordering. `run-repo.js` sorts
+  `scan.issues[]` deterministically as a post-processing step over the
+  JSON it receives from the CLI subprocess — a boundary normalization,
+  not a `collectFiles()`/`scanner.js` fix — by `(ruleId, location,
+  message)`, plain code-unit string comparison (never locale-aware
+  collation, which is itself not guaranteed identical across machines).
+  This key was verified against the real, current rule implementations
+  (`cli/src/rules/*.js`) to be collision-free: every rule deduplicates
+  its own findings by `(location, message)` before returning, and each
+  rule's `message` text is hardcoded, rule-specific prose that cannot
+  coincide with another rule's message at the same location — so no
+  additional tiebreaker is needed today. This is a property of the
+  current rule set, not a structural guarantee independent of it.
+
+With these two normalizations, the raw per-repo artifact (§3) is
+byte-identical across independent checkouts of the same pinned commit —
+not merely "identical modulo known-volatile fields." `issue #10` remains
+open and unfixed in `collectFiles()` itself; only its effect on this
+specific artifact is neutralized, at the `run-repo.js` boundary.
 
 ---
 
