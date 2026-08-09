@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node bin/cli.js",
-    "test": "node test/contract.test.js"
+    "test": "node test/contract.test.js",
+    "validate-public": "node src/validate-public/index.js"
   },
   "keywords": [
     "spring-boot",
