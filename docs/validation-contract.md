@@ -111,12 +111,15 @@ replace, is a separate decision for implementation time):
 
 - **Raw, per-repo:** one JSON file per external repo, full CLI output
   (`--format json`) plus run metadata (repo, pinned commit, CLI version,
-  timestamp, exit code, wall-clock time). Suggested path:
+  timestamp, exit code, wall-clock time). Path (decided, see §10):
   `validation/results/<repo-slug>.json`.
 - **Aggregated summary:** one file combining all repos — totals, per-repo
-  breakdown, and the pinned-commit manifest used for that run. Suggested
-  path: `validation/summary.json` (machine-readable) with a short
-  human-readable `validation/REPORT.md` generated from it.
+  breakdown, and the pinned-commit manifest used for that run. Path
+  (decided, see §10): `validation/results/summary.json`
+  (machine-readable), with a short human-readable
+  `validation/results/REPORT.md` generated from it — both alongside the
+  per-repo files rather than at the top level originally suggested here,
+  so all three artifacts live under the same directory.
 
 Both are generated artifacts (reproducible from the manifest + CLI), so
 whether they're committed to git or produced fresh in CI on demand is an
@@ -170,15 +173,31 @@ identical numbers** on every run, on any machine.
 
 **Acceptance criterion:** running the command twice against the same
 inputs produces byte-identical JSON artifacts (§3), modulo an explicitly
-excluded set of fields — **exactly three, by nature, never normalized**
-because they measure the run itself, not its content:
-- `timestamp` (top-level, run-repo.js's own run metadata)
-- `durationMs` (top-level, wall-clock time)
-- `scan.timestamp` (nested — the CLI's own `--format json` output stamps
-  its own timestamp independently; same reason as the top-level one)
+excluded set of fields, never normalized because they measure the run
+itself, not its content. The table below is the **single canonical
+reference** for these fields — any future CI script that diffs two runs
+should read this table, not scattered per-module comments:
+
+| # | Field | Artifact / location | Populated by | Why excluded |
+|---|---|---|---|---|
+| 1 | `timestamp` | `validation/results/<repo-slug>.json`, top level | `run-repo.js` when `stage:'run'`; `index.js`'s own `fetchMeta` when `stage:'fetch'` (fetch-repo.js reports no timing of its own) | when this repo's attempt ran — run metadata, not scan content |
+| 2 | `durationMs` | `validation/results/<repo-slug>.json`, top level | same as #1 | wall-clock time of this repo's attempt |
+| 3 | `scan.timestamp` | `validation/results/<repo-slug>.json`, nested inside `scan` | the CLI's own `--format json` output (`reporter.js`) | the CLI's own run timestamp, stamped independently of #1 |
+| 4 | `generatedAt` | `validation/results/summary.json`, top level | `aggregate.js` | when the aggregate run itself happened |
+
+Rows 1–2 apply regardless of which pipeline stage produced a repo's
+result — `aggregate.js`'s per-repo artifact envelope (§10) uses the same
+two field names whether the repo reached `run-repo.js` or failed earlier
+in `fetch-repo.js`, so the exclusion is stated once per field, not once
+per stage. `validation/results/REPORT.md` is a derived, human-readable
+rendering of `summary.json`, not itself subject to the byte-identical
+criterion (that criterion targets the JSON artifacts) — but its prose
+reflecting rows 1, 2, and 4 (e.g. a "Generated: ..." line) is expected to
+differ run-to-run for the same reason those fields are excluded above.
 
 Any other diff between two runs is a bug. This should be checkable in CI
-by running the command twice and diffing normalized output.
+by running the command twice and diffing normalized output with rows
+1–4 stripped first.
 
 **Two further non-determinism sources exist in the underlying scan
 output, but neither is handled by exclusion — both are resolved by
@@ -483,6 +502,121 @@ these tests need no working Git installation to pass).
 
 ---
 
+## 10. `aggregate.js` — API, artifacts, and exit-code contract
+
+**Status: resolved (2026-08-09).** This closes the design of the module
+that combines the per-repo results of `fetch-repo.js`/`run-repo.js` into
+the three `validate-public` artifacts and the process exit code.
+
+### 10.1 API and module boundary
+
+`aggregate.js` is **pure**: no filesystem, no subprocess, no network, no
+`process.exit`. It does not read `validation/repos.json` and does not
+call `fetchRepo()`/`runRepo()` itself. The future `index.js` owns all of
+that: reading the manifest, running the fetch→run loop per entry **in
+manifest order**, calling `aggregate()`, writing the three artifacts it
+returns to disk, and exiting with the returned code. This mirrors the
+same "narrow, single responsibility" pattern `fetch-repo.js` and
+`run-repo.js` already use.
+
+```js
+aggregate(entries, { manifest, cliVersion })
+```
+
+- `entries`: one element per manifest repo, in manifest order:
+  `{ repo, commit, stage: 'fetch'|'run', result, fetchMeta? }`.
+  `stage:'run'` + `result` = a `runRepo()` return value verbatim (ok or
+  error). `stage:'fetch'` + `result` = a `fetchRepo()` **failure** result
+  verbatim — a `fetchRepo()` success is never passed with `stage:'fetch'`;
+  it must be re-tagged `stage:'run'` after `runRepo()` executes on it.
+  `fetchMeta: {timestamp, durationMs}` — `index.js`'s own timing captured
+  around the `fetchRepo()` call, since `fetchRepo()` reports none of its
+  own (gap noted at design time).
+- `manifest`/`cliVersion`: echoed into `summary.json` as-is; `aggregate.js`
+  never reads `cli/package.json` itself, to stay pure.
+
+Returns `{ exitCode, perRepo, summary, report }` — `perRepo[i]` is
+`{ slug, path, content }`, where `path` is the exact
+`validation/results/<repo-slug>.json` path and `content` is that file's
+JSON. `summary`/`report` are the exact contents of
+`validation/results/summary.json`/`REPORT.md`.
+
+**Slug:** `run-repo.js` has no filesystem-slug function to reuse — its
+only normalization (`run-repo.js:97-103`) assigns `scan.projectPath =
+repo`, the raw `"owner/name"` string **with the slash intact**, valid as
+a JSON value but not as a filename. `aggregate.js` owns its own
+`slugify()` (`repo.replace('/', '__')`, safe by construction since
+`fetch-repo.js`'s `REPO_RE`, §9.1, already restricts `repo` to one `/`
+and `[A-Za-z0-9.-]`).
+
+### 10.2 Per-repo artifact — uniform envelope
+
+Same key set regardless of which stage produced the result (never
+duck-typed by the presence/absence of a field):
+
+```js
+{
+  repo, commit,                    // echoed from the manifest entry
+  status: 'ok' | 'unavailable',
+  stage: 'fetch' | 'run',
+  errorType: string | null,        // null iff status:'ok'
+  message: string | null,          // null iff status:'ok'
+  cliVersion: string | null,       // null iff stage:'fetch' (run-repo.js never executed)
+  timestamp: string | null,
+  exitCode: number | null,         // the CLI's own 0/1, informational only — see §10.4
+  durationMs: number | null,
+  scan: object | null,             // run-repo.js's normalized scan, or null
+}
+```
+
+### 10.3 Metrics
+
+`summary.totals` sums fields `fetch-repo.js`/`run-repo.js`/the CLI
+already computed — never re-derives a count from `scan.issues[]`:
+`filesScanned` and `findings.{critical,major,warning,info}` are summed
+directly from each ok repo's `scan.filesScanned`/`scan.summary.*`.
+`findings.reported` is summed from `scan.summary.reported`, not
+recomputed as `critical+major+warning+info` — see §10.5 for why these two
+are expected, not structurally guaranteed, to agree.
+
+### 10.4 Exit code — confirmed decoupled from `scan.healthy`
+
+`exitCode` is `1` iff `totals.reposUnavailable > 0`, else `0`. It depends
+**only** on `status`/`errorType` per repo (did the validation run
+complete?), **never** on `scan.healthy` (does the scanned code have
+critical findings?) — a repo with `status:'ok'` and `scan.healthy:false`
+does not affect `exitCode`. This mirrors `run-repo.js:151-164`'s own
+precedent one layer down: the CLI's own exit code (0 or 1, driven by
+`scanner.js:181`'s critical-findings check) is recorded on the result as
+metadata, never used to decide `run-repo.js`'s own `status`. §7 already
+states this process does not measure detection quality — `scan.healthy`
+is exactly that kind of signal, and stays out of the pass/fail decision.
+
+### 10.5 Severity-sum invariant — documented, not enforced
+
+`totals.findings.reported === critical + major + warning + info` holds
+for every input the current rule set can produce (`cli/src/rules/*.js`
+only ever emits `'critical'`/`'major'`/`'warning'` — verified by reading
+every rule file; `'info'` is a defined 4th tier,
+`cli/src/rule-catalog.js:9`, `reporter.js`'s `SEVERITY_ORDER`,
+`sarif.js`'s `SEVERITY_RANK`, never emitted today). It is **not**
+enforced anywhere: `reporter.js:124` counts `c[f.severity]` without
+validating `f.severity` against the four known keys, and
+`reporter.js:63` already carries a defensive `?? 4` fallback for an
+unlisted severity when sorting — meaning the codebase itself anticipates
+a 5th value could appear without crashing, just without being counted in
+any of the four buckets. Same caveat class as `run-repo.js`'s own
+documented sort-key collision-freedom (`run-repo.js:60-71`).
+
+### 10.6 What stays out of `aggregate.js`
+
+Writing the three artifacts to disk, reading `validation/repos.json`,
+running the fetch→run loop, deciding sequential vs. parallel execution,
+and calling `process.exit` are all `index.js`'s job — not designed here,
+not implemented yet.
+
+---
+
 ## Open points requiring confirmation before implementation
 
 1. Final repo list beyond `eugenp/tutorials` + `spring-petclinic` (§1).
@@ -494,7 +628,12 @@ these tests need no working Git installation to pass).
 5. Trigger for `validate-public` itself: manual (with named owner +
    cadence) vs. CI on schedule vs. CI on release, and whether a
    reproducibility break (§5) hard-fails CI or only warns (§8).
+6. `index.js` design: reads the manifest, runs fetch→run per entry
+   (sequential vs. parallel — recommendation at design time was
+   sequential for v1), writes `aggregate()`'s three returned artifacts to
+   disk, calls `process.exit(exitCode)`. Not designed or implemented yet.
 
 **Resolved:** pinned commits vs. moving branches (§2) — closed 2026-08-04.
 The manifest pins exact commit SHAs only; see the "Decision (final)"
-paragraph in §2.
+paragraph in §2. `aggregate.js`'s API/artifacts/exit-code contract (§10)
+— closed 2026-08-09.
