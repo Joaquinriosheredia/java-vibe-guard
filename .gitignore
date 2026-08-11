@@ -1,1 +1,4 @@
 mcp-server/target/
+
+validation/results/*.json
+!validation/results/summary.json

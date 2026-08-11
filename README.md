@@ -285,9 +285,19 @@ What makes it solid is not the sophistication of any individual layer, but that 
 
 ## Validation
 
-- **102 tests**, 0 false positives.
-- Validated on **17,137 real files** across 10 Spring Boot repositories.
-- **0 confirmed false positives** in CRITICAL rules.
+- **102 tests**, 0 false positives — MCP Server test suite (`mvn test` in `mcp-server/`).
+- CLI `validate-public` pipeline run on **2 real-world Spring Boot repositories**,
+  pinned to fixed commits (see [`validation/repos.json`](validation/repos.json)):
+  - [`eugenp/tutorials`](https://github.com/eugenp/tutorials) @ `ccab8a7` — 29,141 files scanned
+  - [`spring-projects/spring-petclinic`](https://github.com/spring-projects/spring-petclinic) @ `88e37c1` — 77 files scanned
+  - **29,218 files scanned in total.**
+- Both repository validations completed successfully. Reproducibility was
+  verified by running the pipeline twice against the same pinned commits:
+  the resulting JSON artifacts were byte-identical except for the four
+  run-specific fields excluded by docs/validation-contract.md §5.
+- CLI version `1.0.3`. Per-rule/per-repo finding counts (2,909 findings
+  reported in this run) are not reproduced here — see the generated
+  artifact (`validation/results/summary.json`) for the detailed breakdown.
 
 ## Found in the Wild
 

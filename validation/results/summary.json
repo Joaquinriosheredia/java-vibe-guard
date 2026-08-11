@@ -1,0 +1,62 @@
+{
+  "generatedAt": "2026-08-10T20:08:13.589Z",
+  "cliVersion": "1.0.3",
+  "manifest": [
+    {
+      "repo": "eugenp/tutorials",
+      "commit": "ccab8a758d1f1f5043f897548f85a74f88d904fb"
+    },
+    {
+      "repo": "spring-projects/spring-petclinic",
+      "commit": "88e37c15cf6fc8490b01bc3e8e2c800cec1ac272"
+    }
+  ],
+  "totals": {
+    "reposTotal": 2,
+    "reposOk": 2,
+    "reposUnavailable": 0,
+    "filesScanned": 29218,
+    "findings": {
+      "critical": 22,
+      "major": 220,
+      "warning": 2667,
+      "info": 0,
+      "reported": 2909
+    }
+  },
+  "perRepo": [
+    {
+      "repo": "eugenp/tutorials",
+      "commit": "ccab8a758d1f1f5043f897548f85a74f88d904fb",
+      "slug": "eugenp__tutorials",
+      "status": "ok",
+      "stage": "run",
+      "errorType": null,
+      "filesScanned": 29141,
+      "findings": {
+        "critical": 22,
+        "major": 211,
+        "warning": 2649,
+        "info": 0
+      },
+      "healthy": false
+    },
+    {
+      "repo": "spring-projects/spring-petclinic",
+      "commit": "88e37c15cf6fc8490b01bc3e8e2c800cec1ac272",
+      "slug": "spring-projects__spring-petclinic",
+      "status": "ok",
+      "stage": "run",
+      "errorType": null,
+      "filesScanned": 77,
+      "findings": {
+        "critical": 0,
+        "major": 9,
+        "warning": 18,
+        "info": 0
+      },
+      "healthy": true
+    }
+  ],
+  "exitCode": 0
+}
