@@ -236,6 +236,8 @@ not merely "identical modulo known-volatile fields." `issue #10` remains
 open and unfixed in `collectFiles()` itself; only its effect on this
 specific artifact is neutralized, at the `run-repo.js` boundary.
 
+**Update ([issue #10](https://github.com/Joaquinriosheredia/java-vibe-guard/issues/10) fixed):** `collectFiles()` now sorts directory entries itself before traversal, so `scan.issues[]` order is deterministic at the source, not only at the `run-repo.js` boundary. The `run-repo.js` sort described above is kept as-is and remains an explicit, redundant guarantee of this contract — it does not depend on `scanner.js`'s internal behavior and continues to protect this artifact even if a future CLI entry point bypasses `collectFiles()`'s ordering.
+
 ---
 
 ## 6. External repo unavailable or changed drastically
