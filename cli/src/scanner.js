@@ -57,16 +57,27 @@ const DEFAULT_IGNORED_DIRS = new Set([
 
 const SCAN_EXTENSIONS = new Set(['.java', '.yml', '.yaml', '.properties', '.xml', '.gradle', '.kts']);
 
-export function collectFiles(dir, files = [], ignoredDirs = DEFAULT_IGNORED_DIRS) {
+// readdirSync() entry order is filesystem/OS-dependent (issue #10) — sorted
+// right after the call so traversal order, and every finding array
+// downstream of it, is deterministic regardless of directory-entry order.
+// Plain default .sort() (code-unit comparison, not localeCompare()) — the
+// same criterion run-repo.js's compareIssues() already uses deliberately,
+// to avoid locale/ICU collation reintroducing this same non-determinism
+// from a different angle (see run-repo.js's own comment on that choice).
+//
+// readdirFn is a test-only seam (no mocking library in this project's
+// dependencies — same pattern as fetchRepo()'s spawnFn override); real
+// callers never pass it, and the default is the real fs.readdirSync.
+export function collectFiles(dir, files = [], ignoredDirs = DEFAULT_IGNORED_DIRS, { readdirFn = readdirSync } = {}) {
   let entries;
-  try { entries = readdirSync(dir); } catch { return files; }
+  try { entries = readdirFn(dir).sort(); } catch { return files; }
   for (const entry of entries) {
     if (ignoredDirs.has(entry)) continue;
     const fullPath = join(dir, entry);
     let stat;
     try { stat = statSync(fullPath); } catch { continue; }
     if (stat.isDirectory()) {
-      collectFiles(fullPath, files, ignoredDirs);
+      collectFiles(fullPath, files, ignoredDirs, { readdirFn });
     } else if (SCAN_EXTENSIONS.has(extname(entry))) {
       files.push(fullPath);
     }
