@@ -6,7 +6,7 @@
 
 ![java-vibe-guard demo](https://raw.githubusercontent.com/Joaquinriosheredia/java-vibe-guard/master/demo-screenshot.png)
 
-A multi-layer defense system against vibe coding anti-patterns in Java/Spring Boot projects. Combines static analysis, MCP-native tooling, and cognitive governance to catch production bugs that compile cleanly and fail under load.
+A multi-layer defense system against vibe coding anti-patterns in Java/Spring Boot projects. Combines static analysis and MCP-native tooling to catch production bugs that compile cleanly and fail under load.
 
 ## Quick Start
 
@@ -61,7 +61,7 @@ java-vibe-guard/
 
 ## Active Rules — MCP Server (VIBE-001 to VIBE-007)
 
-**7 rules · 102 tests · 0 false positives**
+**7 rules · 102 tests**
 
 | Code | Rule | Description |
 |------|------|-------------|
@@ -220,7 +220,7 @@ The action writes a markdown table to the GitHub Actions summary panel and uploa
 
 **What it adds over the CLI:** closes the feedback loop within the same session. Instead of manually running the CLI and pasting the output, Claude can analyze, see the results, fix, and re-analyze in a single conversation. Also serves as a validation signal Claude can use to confirm that a change it just made didn't introduce new anti-patterns.
 
-**Limitation:** same as the CLI, inheriting its static analysis constraints. Also depends on Claude deciding to invoke the tool — it is not an automatic barrier like the senior-architect gate.
+**Limitation:** same as the CLI, inheriting its static analysis constraints. Also depends on Claude deciding to invoke the tool — it is not an automatic barrier.
 
 ```bash
 # Build
@@ -279,13 +279,13 @@ The two layers are deliberately redundant in purpose but not in mechanism. The r
 
 ## Stack Evaluation
 
-What makes it solid is not the sophistication of any individual layer, but that the pipeline operates at zero marginal cost per analysis: the cognitive gate is part of Claude's process, the MCP is a tool call within the session, the CLI is executable in any CI without licenses. The total system cost is zero. The only real cost is not having it: production code with anti-patterns that only fail under load.
+What makes it solid is not the sophistication of any individual layer, but that the pipeline operates at zero marginal cost per analysis: the MCP is a tool call within the session, the CLI is executable in any CI without licenses. The total system cost is zero. The only real cost is not having it: production code with anti-patterns that only fail under load.
 
 ---
 
 ## Validation
 
-- **102 tests**, 0 false positives — MCP Server test suite (`mvn test` in `mcp-server/`).
+- **102 tests**, 0 false positives — MCP's curated unit test suite (`mvn test` in `mcp-server/`).
 - CLI `validate-public` pipeline run on **2 real-world Spring Boot repositories**,
   pinned to fixed commits (see [`validation/repos.json`](validation/repos.json)):
   - [`eugenp/tutorials`](https://github.com/eugenp/tutorials) @ `ccab8a7` — 29,141 files scanned
