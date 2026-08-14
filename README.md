@@ -35,7 +35,7 @@ Requires Docker 24+, Java 17+, and 512 MB of free memory.
 
 ### GitHub Actions (CI)
 ```yaml
-- uses: Joaquinriosheredia/java-vibe-guard@v1
+- uses: Joaquinriosheredia/java-vibe-guard@v1.1.0
   with:
     path: '.'
     fail-on: 'critical'
@@ -183,7 +183,7 @@ Add to any Java project's workflow — no installation required:
 
 ```yaml
 - name: java-vibe-guard
-  uses: Joaquinriosheredia/java-vibe-guard@v1
+  uses: Joaquinriosheredia/java-vibe-guard@v1.1.0
   with:
     path: '.'            # directory to scan (default: .)
     fail-on: 'critical'  # fail step on CRITICAL findings (default)
@@ -192,13 +192,14 @@ Add to any Java project's workflow — no installation required:
 Full options:
 
 ```yaml
-- uses: Joaquinriosheredia/java-vibe-guard@v1
+- uses: Joaquinriosheredia/java-vibe-guard@v1.1.0
   with:
     path: '.'
     rule: ''             # blank = all rules; or: blocking | blocking-kafka | kafka | kafka-send-timeout | layers | transactions | observability | reactor-block
     ignore: 'labs,demo'  # comma-separated dirs to skip
     fail-on: 'critical'  # critical | never
     upload-report: 'true'  # attach JSON report as artifact
+    sarif: 'false'          # generate a SARIF report and upload it to GitHub Code Scanning (opt-in)
 
   # Outputs available in subsequent steps:
   #   ${{ steps.guard.outputs.critical }}
@@ -206,9 +207,10 @@ Full options:
   #   ${{ steps.guard.outputs.warning }}
   #   ${{ steps.guard.outputs.healthy }}
   #   ${{ steps.guard.outputs.report-json }}
+  #   ${{ steps.guard.outputs.report-sarif }}  # only set when sarif: 'true'
 ```
 
-The action writes a markdown table to the GitHub Actions summary panel and uploads the full JSON report as a workflow artifact (30-day retention).
+The action writes a markdown table to the GitHub Actions summary panel and uploads the full JSON report as a workflow artifact (30-day retention). When `sarif: 'true'`, it also generates a SARIF 2.1.0 report and uploads it directly to GitHub Code Scanning via `github/codeql-action/upload-sarif` (requires `@v1.1.0` or later — not available on `@v1`).
 
 ---
 
