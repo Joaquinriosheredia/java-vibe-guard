@@ -303,7 +303,9 @@ What makes it solid is not the sophistication of any individual layer, but that 
 
 ## Found in the Wild
 
-Finding 1 — VIBE-005: @Transactional on @RestController holds DB connections during HTTP serialization
+One "Found in the Wild" example has survived contextual audit against the pinned commit — checked for real callers, real test coverage, and confirmation that the flagged pattern was not deliberate. Two other candidates were investigated with the same scrutiny and retracted; see the note below the finding for why.
+
+VIBE-005: @Transactional on @RestController holds DB connections during HTTP serialization
   
 Repo: eugenp/tutorials (~35k stars), JHipster 8 monolithic module
 Rule: VIBE-005 · ConnectionPoolStarvation · MAJOR
@@ -342,66 +344,10 @@ scaffolding generates this pattern for every admin resource controller, so the i
 replicated across all CRUD controllers in a generated codebase.
   
 ---
-Finding 2 — VIBE-002: .block() called on Schedulers.parallel() thread
-  
-Repo: eugenp/tutorials (~35k stars), spring-reactive-modules
-Rule: VIBE-002 · ReactorBlockingCall · CRITICAL
-File: spring-reactive-modules/spring-reactive-4/.../service/FileContentSearchService.java
-  
-public Mono<Boolean> blockingSearchOnParallelThreadPool(String fileName, String searchTerm) {
-return Mono.just("")
-.publishOn(Schedulers.parallel()) // switches to parallel scheduler
-.map(s -> fileService.getFileContentAsString(fileName)
-.block() // ← flagged: blocks a parallel thread
-.contains(searchTerm));
-}
-  
-Why it fails under load:
-Schedulers.parallel() is a fixed-size thread pool sized to
-Runtime.getRuntime().availableProcessors() — typically 4 to 8 threads on production hardware. Its
-intended use is CPU-bound computation, not I/O. Calling .block() inside a map operator pinned to
-this scheduler occupies one of those threads for the entire duration of the file read. With 5
-concurrent requests on a 4-core machine, all parallel threads are blocked waiting for file I/O; no
-further reactive operators — including other pending HTTP responses, ongoing DB queries, or
-WebClient calls — can be scheduled. The effect is functionally equivalent to a deadlock from the
-reactive pipeline's perspective.
-  
-Estimated impact:
-Under concurrent load, complete stall of all reactive work scheduled on Schedulers.parallel(). On a
-4-core server, 4 simultaneous requests to this endpoint render the service unresponsive to all
-reactive traffic until the blocked threads are released.
-  
----
-Finding 3 — VIBE-006: Thread.sleep() inside @KafkaListener delays acknowledgement and triggers rebalances
-  
-Repo: eugenp/tutorials (~35k stars), spring-kafka-2 monitoring module
-Rule: VIBE-006 · KafkaRebalanceHazard · CRITICAL
-File: spring-kafka-2/.../monitoring/simulation/ConsumerSimulator.java
-  
-@KafkaListener(
-topics = "${monitor.topic.name}",
-containerFactory = "kafkaListenerContainerFactory",
-autoStartup = "${monitor.consumer.simulate}"
-)
-public void listenGroup(String message) throws InterruptedException {
-Thread.sleep(10L); // ← flagged: stalls listener thread per message
-}
-  
-Why it fails under load:
-The Kafka consumer listener thread is single-threaded per partition by default. Thread.sleep(10L)
-introduces a mandatory 10 ms delay per message. At 1,000 messages/second per partition, the listener
-can process at most 100 messages/second — a 10× throughput reduction. As consumer lag grows,
-downstream systems relying on low-latency event processing experience data staleness. More
-critically: if max.poll.interval.ms (default 5 minutes) is exceeded — which occurs if a message
-volume spike causes the poll loop to be blocked beyond the interval — Kafka considers the consumer
-dead, triggers a group rebalance, and temporarily unassigns all partitions from the consumer. During
-rebalance, processing halts for all partitions in the group. Any messages fetched before rebalance
-but not yet committed are redelivered after rebalance, causing duplicate processing unless the
-consumer is idempotent.
-  
-Estimated impact:
-Throughput capped at 1000ms / sleep_duration messages/second per partition. At Thread.sleep(10L):
-100 msg/s max. If multiple partitions share the same listener container, each partition waits for
-the previous message to complete — multiplying the lag. In monitoring contexts where this pattern
-appeared, consumer lag alarms are typically the first production signal.
 
+**Two other candidates were retracted after the same audit.** A `.block()` call in `spring-reactive-modules/spring-reactive-4/.../service/FileContentSearchService.java` and a `Thread.sleep()` inside a `@KafkaListener` in `spring-kafka-2/.../monitoring/simulation/ConsumerSimulator.java` (both in `eugenp/tutorials`) were both confirmed to be deliberate demo/tutorial code, not unintentional production defects:
+
+- `FileContentSearchService.java` is one method in a six-method side-by-side comparison of correct and incorrect Reactor blocking patterns, built for a Baeldung tutorial article (route prefix `bael7724`). Its own integration test (`FileSearchAPIIntegrationTest.givenAFileNameAndASearchTerm_whenParallelThreadPoolAPIIsHit_thenReturnAServerError`) asserts that the flagged endpoint *should* return a 5xx error — the "failure" is the documented, intended teaching outcome, not a bug.
+- `ConsumerSimulator.java` is an intentional Kafka lag simulator: `Thread.sleep(10L)` is the mechanism that deliberately creates consumer lag for a companion `LagAnalyzerService` to detect and display. Both `monitor.consumer.simulate` and `monitor.producer.simulate` default to `true` in the module's `application.properties`, confirming the module is designed to run as a demonstration.
+
+No replacement examples were added — the goal is honest evidence, not a fixed count of findings.
