@@ -303,51 +303,10 @@ What makes it solid is not the sophistication of any individual layer, but that 
 
 ## Found in the Wild
 
-One "Found in the Wild" example has survived contextual audit against the pinned commit — checked for real callers, real test coverage, and confirmation that the flagged pattern was not deliberate. Two other candidates were investigated with the same scrutiny and retracted; see the note below the finding for why.
+All three "Found in the Wild" candidates investigated so far were retracted after contextual audit against the pinned commit — checked for real callers, real test coverage, and (for the case below) the technical accuracy of the mechanism the rule claims to detect. None currently stands as valid field evidence for its rule; see below for why each was retracted.
 
-VIBE-005: @Transactional on @RestController holds DB connections during HTTP serialization
-  
-Repo: eugenp/tutorials (~35k stars), JHipster 8 monolithic module
-Rule: VIBE-005 · ConnectionPoolStarvation · MAJOR
-File: jhipster-8-modules/jhipster-8-monolithic/.../web/rest/AuthorityResource.java
-  
-@RestController
-@RequestMapping("/api/authorities")
-@Transactional // ← flagged
-public class AuthorityResource {
-  
-@GetMapping("")
-public List<Authority> getAllAuthorities() {
-return authorityRepository.findAll();
-}
-  
-@DeleteMapping("/{id}")
-public ResponseEntity<Void> deleteAuthority(@PathVariable String id) {
-authorityRepository.deleteById(id);
-return ResponseEntity.noContent()...build();
-}
-}
-  
-Why it fails under load:
-@Transactional on the class means every endpoint opens a DB connection on the first repository call
-and holds it open until the method fully returns — which includes JSON serialization of the response
-body, header writing, and Tomcat's response commit. DB serialization is measured in microseconds;
-HTTP response finalization under load can take milliseconds of extra latency as the response buffer
-flushes. At 500 concurrent requests against a pool capped at 20 connections, the 480 threads queuing
-for a connection accumulate serialization latency and keep connections checked out longer than
-necessary, accelerating pool exhaustion.
-  
-Estimated impact:
-~10–30% connection hold-time overhead per request; at sustained load, connection pool exhaustion
-causes HikariCP - Connection is not available, request timed out after 30000ms errors. JHipster
-scaffolding generates this pattern for every admin resource controller, so the issue is typically
-replicated across all CRUD controllers in a generated codebase.
-  
----
-
-**Two other candidates were retracted after the same audit.** A `.block()` call in `spring-reactive-modules/spring-reactive-4/.../service/FileContentSearchService.java` and a `Thread.sleep()` inside a `@KafkaListener` in `spring-kafka-2/.../monitoring/simulation/ConsumerSimulator.java` (both in `eugenp/tutorials`) were both confirmed to be deliberate demo/tutorial code, not unintentional production defects:
-
-- `FileContentSearchService.java` is one method in a six-method side-by-side comparison of correct and incorrect Reactor blocking patterns, built for a Baeldung tutorial article (route prefix `bael7724`). Its own integration test (`FileSearchAPIIntegrationTest.givenAFileNameAndASearchTerm_whenParallelThreadPoolAPIIsHit_thenReturnAServerError`) asserts that the flagged endpoint *should* return a 5xx error — the "failure" is the documented, intended teaching outcome, not a bug.
-- `ConsumerSimulator.java` is an intentional Kafka lag simulator: `Thread.sleep(10L)` is the mechanism that deliberately creates consumer lag for a companion `LagAnalyzerService` to detect and display. Both `monitor.consumer.simulate` and `monitor.producer.simulate` default to `true` in the module's `application.properties`, confirming the module is designed to run as a demonstration.
+- `FileContentSearchService.java` (`spring-reactive-modules/spring-reactive-4/.../service/`, `eugenp/tutorials`) — a `.block()` call flagged as VIBE-002 evidence — is one method in a six-method side-by-side comparison of correct and incorrect Reactor blocking patterns, built for a Baeldung tutorial article (route prefix `bael7724`). Its own integration test (`FileSearchAPIIntegrationTest.givenAFileNameAndASearchTerm_whenParallelThreadPoolAPIIsHit_thenReturnAServerError`) asserts that the flagged endpoint *should* return a 5xx error — the "failure" is the documented, intended teaching outcome, not a bug.
+- `ConsumerSimulator.java` (`spring-kafka-2/.../monitoring/simulation/`, `eugenp/tutorials`) — a `Thread.sleep()` inside a `@KafkaListener` flagged as VIBE-006 evidence — is an intentional Kafka lag simulator: `Thread.sleep(10L)` is the mechanism that deliberately creates consumer lag for a companion `LagAnalyzerService` to detect and display. Both `monitor.consumer.simulate` and `monitor.producer.simulate` default to `true` in the module's `application.properties`, confirming the module is designed to run as a demonstration.
+- `AuthorityResource.java` (`jhipster-8-modules/jhipster-8-monolithic/.../web/rest/`, `eugenp/tutorials`) — `@Transactional` on a `@RestController` class, flagged as VIBE-005 evidence — was retracted for a different reason than the two findings above. The `@Transactional` annotation is real, unmodified JHipster-generated scaffolding (confirmed against the pinned commit and the JHipster README), not demo/tutorial code — so this is not a "there's no `@Transactional` here" retraction. It is retracted because the mechanism the README attributed to it was technically incorrect: Spring's `TransactionInterceptor` commits the transaction and releases the JDBC connection synchronously, inside the same method invocation that wraps the controller call, *before* control returns to Spring MVC's return-value handling — `HttpMessageConverter`/Jackson serialization only begins after that invocation has already completed (`TransactionAspectSupport.invokeWithinTransaction`, `JpaTransactionManager.doCleanupAfterCompletion`, `ServletInvocableHandlerMethod.invokeAndHandle` — Spring Framework source). The project also runs with `spring.jpa.open-in-view=false`, ruling out Open Session In View as an alternate path to the same claimed effect. The connection being held open *during a blocking call inside the transactional method body* remains a valid, real mechanism (that's what `ConnectionPoolStarvationRule` actually detects, per its rule definition above) — what does not hold is the claim that the connection stays open through HTTP serialization *after* the method returns.
 
 No replacement examples were added — the goal is honest evidence, not a fixed count of findings.
