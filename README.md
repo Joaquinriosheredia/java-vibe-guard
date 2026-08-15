@@ -61,7 +61,7 @@ java-vibe-guard/
 
 ## Active Rules — MCP Server (VIBE-001 to VIBE-007)
 
-**7 rules · 102 tests**
+**7 rules · 143 tests**
 
 | Code | Rule | Description |
 |------|------|-------------|
@@ -287,7 +287,7 @@ What makes it solid is not the sophistication of any individual layer, but that 
 
 ## Validation
 
-- **102 tests**, 0 false positives — MCP's curated unit test suite (`mvn test` in `mcp-server/`).
+- **143 tests**, 0 false positives — MCP's curated unit test suite (`mvn test` in `mcp-server/`).
 - CLI `validate-public` pipeline run on **2 real-world Spring Boot repositories**,
   pinned to fixed commits (see [`validation/repos.json`](validation/repos.json)):
   - [`eugenp/tutorials`](https://github.com/eugenp/tutorials) @ `ccab8a7` — 29,141 files scanned
