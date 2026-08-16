@@ -269,7 +269,7 @@ The two layers are deliberately redundant in purpose but not in mechanism. The r
 | `.get()`/`.block()` blocking inside `@Transactional` | Layer 3 only (VIBE-001, VIBE-005) |
 | Blocking call inside `@KafkaListener` | Layers 2 + 3 (cli `blocking-kafka` + VIBE-006) |
 | Kafka `send().get()` with no timeout argument | Layer 2 only (cli `kafka-send-timeout`) |
-| `.block()`/`.blockFirst()`/`.blockLast()`/`.toFuture().get()` in a Reactor chain with no `@Scheduled`/`@Async`/`@EventListener`/`@KafkaListener` | Layers 2 + 3 (cli `reactor-block` + VIBE-002) |
+| `.block()`/`.blockFirst()`/`.blockLast()`/`.toFuture().get()` in a Reactor chain inside an `@Service`/`@RestController`/`@Component` class, in any method other than `@Test`/`@PostConstruct`/`main()` | Layers 2 + 3 (cli `reactor-block` + VIBE-002) |
 | Controller accessing repository directly | Layer 2 only (cli `layers`) |
 | Endpoint without structured logging | Layer 2 only (cli `observability`) |
 | Generated code the LLM declares correct but isn't | Layer 3 (immediate feedback) |
