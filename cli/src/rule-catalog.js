@@ -66,8 +66,8 @@ export const RULE_CATALOG = {
     severities: ['critical'],
   },
   transactions: {
-    short: 'Transactional-boundary and rollback anti-patterns.',
-    full: 'Detects @Transactional methods with missing rollback configuration or blocking calls made while holding a database transaction open, either of which can exhaust the connection pool or cause silent data loss under failure.',
+    short: '@Transactional placed on a Controller method, or combined with @Async.',
+    full: 'Detects two @Transactional misuses, per transactions.js: (1) @Transactional on a method inside a class annotated @RestController or @Controller — the transaction boundary belongs in the Service layer instead; and (2) @Transactional and @Async annotated near the same method — Spring\'s proxy-based transaction propagation does not carry over onto the @Async-dispatched thread, so the transaction silently does not apply there.',
     severities: ['critical', 'major'],
   },
 };
