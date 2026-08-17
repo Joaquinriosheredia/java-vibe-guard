@@ -41,13 +41,13 @@ export const RULE_CATALOG = {
     severities: ['critical'],
   },
   kafka: {
-    short: 'Kafka configuration and listener anti-patterns.',
+    short: 'Kafka listener, consumer group, and Zookeeper configuration issues.',
     full: 'Flags Kafka usage issues: Zookeeper-based configuration deprecated in Kafka 3.x, @KafkaListener without an explicit groupId, listeners without retry/DLQ handling, and consumer configuration missing group.id.',
     severities: ['warning'],
   },
   'kafka-send-timeout': {
     short: 'Kafka send() result consumed with an unbounded blocking get().',
-    full: 'Detects a `.send(...).get()` chain with no timeout argument, in a file that imports KafkaTemplate or org.springframework.kafka. An unbounded .get() blocks the calling thread indefinitely if the broker is slow or unavailable, risking thread-pool exhaustion under sustained failure — the same shape as Java-Production-Labs SagaOrderService.java and StreamController.java before they were fixed to use .get(timeout, TimeUnit).',
+    full: 'Detects a `.send(...).get()` chain with no timeout argument, in a file that imports KafkaTemplate or org.springframework.kafka — `.get(timeout, TimeUnit)` calls with an explicit timeout argument are not matched. An unbounded .get() blocks the calling thread indefinitely if the broker is slow or unavailable, risking thread-pool exhaustion under sustained failure — the same shape as Java-Production-Labs SagaOrderService.java and StreamController.java before they were fixed to use .get(timeout, TimeUnit).',
     severities: ['critical'],
   },
   layers: {
