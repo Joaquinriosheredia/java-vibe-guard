@@ -409,6 +409,28 @@ for (const rule of ['blocking', 'blocking-kafka', 'kafka', 'layers', 'observabil
   assert(json.issues.length === 0, `--rule ${rule} on CommentMentionGateProbe.java produces 0 findings (issue #9)`);
 }
 
+// ─── Test 5a3: multi-line block-comment gate regression guard (transactions,
+// second matching site — not covered by issue #6 or #9) ─────────────────────
+// TransactionsBlockCommentGateProbe.java mentions "@Transactional" only
+// inside a /* ... */ block comment that opens on one line and closes on a
+// later one, WITHOUT the conventional " * " per-line Javadoc prefix —
+// CommentMentionGateProbe.java above only exercises a "//"-commented
+// single-line mention (issue #9's original shape) and a conventional
+// Javadoc mention (both already safe before this fix, since a same-line "//"
+// comment is fully stripped by a single stripComments(line) call, and a
+// " * "-prefixed continuation line is separately caught by
+// transactions.js's trimmed.startsWith('*') skip). Neither of those two
+// existing defenses reaches an unconventional multi-line block comment. This
+// is the site transactions.js's per-line `@Transactional` trigger match
+// itself, left unprotected by both issue #6 (which only fixed the @Async/ctx
+// check) and issue #9 (which only fixed the isController gate) — see
+// cli/src/rules/transactions.js's stripCommentsPreservingLines() comment.
+console.log('\n📋 Test 5a3: multi-line block-comment gate regression guard (transactions)');
+{
+  const json = runOnFixture('TransactionsBlockCommentGateProbe.java', 'transactions');
+  assert(json.issues.length === 0, '--rule transactions on TransactionsBlockCommentGateProbe.java produces 0 findings');
+}
+
 // ─── Test 5b: --rule post-filter — blocking vs blocking-kafka (issue #7) ────
 // KafkaBlockingProbe.java produces a single blocking-kafka finding (a bare
 // .join() inside a @KafkaListener method — blocking.js:50 picks the rule id
