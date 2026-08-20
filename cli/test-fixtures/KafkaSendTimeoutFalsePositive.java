@@ -32,4 +32,15 @@ public class KafkaSendTimeoutFalsePositive {
         kafka.send("orders", orderId, payload)
             .get();
     }
+
+    /**
+     * Safe: the same pattern, but documented inside a multi-line JavaDoc
+     * block comment — not real code. This is the exact shape that opened a
+     * false positive before checkKafkaSendTimeout() tracked block-comment
+     * state across lines: kafka.send("orders", orderId, payload).get();
+     * Always use .get(timeout, TimeUnit) instead, as this method does.
+     */
+    public void publishWithTimeoutDocumented(String orderId, String payload) throws Exception {
+        kafka.send("orders", orderId, payload).get(5, TimeUnit.SECONDS);
+    }
 }

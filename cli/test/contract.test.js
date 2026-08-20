@@ -260,6 +260,47 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
   const findings = checkKafkaSendTimeout(fileContexts);
   assert(findings.length === 0, 'the same .send(...).get() shape in a file with no Kafka import produces 0 findings (scope gate)');
 }
+{
+  // Multi-line block/JavaDoc comment: the anti-pattern text appears on an
+  // interior line of a /* ... */ block that opens and closes on different
+  // physical lines — stripComments() alone can't see that (it only strips a
+  // block comment when both delimiters are in the text it's given, and this
+  // detector is called one physical line at a time). Checked directly
+  // against the detector, with a real finding AFTER the comment block to
+  // also prove line numbers stay aligned (not shifted) once the comment
+  // spans multiple lines.
+  const fileContexts = [
+    {
+      filePath: 'DocOnlyExample.java',
+      relativePath: 'DocOnlyExample.java',
+      lines: [
+        'package com.example.saga;',
+        '',
+        'import org.springframework.kafka.core.KafkaTemplate;',
+        '',
+        'public class DocOnlyExample {',
+        '    private final KafkaTemplate<String, String> kafka;',
+        '',
+        '    /**',
+        '     * Example usage (do NOT copy as-is):',
+        '     * kafka.send("orders", orderId, payload).get();',
+        '     * Use .get(timeout, TimeUnit) instead.',
+        '     */',
+        '    public void publishWithTimeout(String orderId, String payload) throws Exception {',
+        '        kafka.send("orders", orderId, payload).get(5, java.util.concurrent.TimeUnit.SECONDS);',
+        '    }',
+        '',
+        '    public void publishWithoutTimeout(String orderId, String payload) throws Exception {',
+        '        kafka.send("orders", orderId, payload).get();',
+        '    }',
+        '}',
+      ],
+    },
+  ];
+  const findings = checkKafkaSendTimeout(fileContexts);
+  assert(findings.length === 1, 'the anti-pattern documented inside a multi-line JavaDoc block produces 0 findings — only the real call below it is flagged');
+  assert(findings[0].location === 'DocOnlyExample.java:18', 'the one real finding keeps its correct line number (18) — unaffected by the multi-line comment above it');
+}
 
 // reactor-block ────────────────────────────────────────────────────────────
 {

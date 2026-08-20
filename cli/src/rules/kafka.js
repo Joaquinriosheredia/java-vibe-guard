@@ -149,6 +149,72 @@ const KAFKA_LIKE_RE = /\bKafkaTemplate\b|org\.springframework\.kafka/;
 //     this regex-based engine doesn't have.
 const SEND_GET_NO_TIMEOUT_RE = /\.send\s*\(.*\)\s*\.\s*get\s*\(\s*\)/;
 
+// checkKafkaSendTimeout() needs to see whether a physical line sits inside a
+// /* ... */ block comment that OPENED on an earlier line — something the
+// shared stripComments() helper can't tell it, because that helper only
+// strips a block comment when both delimiters land on the text it's given,
+// and this function calls it one physical line at a time (so its location
+// still lines up with i+1). A JavaDoc/block comment whose opening `/*` is on
+// one line and closing `*/` on another leaves the lines in between
+// completely unstripped, so text merely documented inside them (e.g. a
+// JavaDoc example showing the exact anti-pattern this rule targets) reads as
+// real code. Issue #9 (commit 85dbb63) reviewed this function and left it
+// untouched, explicitly judging it "already correct" — accurately, for the
+// only case the regression fixture exercised at the time (a single-line //
+// comment). #9 never tested the multi-line block-comment case; this is the
+// same class of defect #9 fixed elsewhere, just a corner #9's own test
+// coverage didn't reach in this rule. Kept local to this function (not
+// promoted into strip-comments.js) so blocking.js/layers.js/observability.js/
+// transactions.js — already stabilized by #9 — are untouched.
+//
+// Single forward pass over the file's lines, tracking whether we're inside
+// an unclosed block comment. Blanks out `//` comments, same-line `/* */`
+// comments, and any span covered by a block comment that carries over from
+// a previous line — without deleting characters outside comments or
+// collapsing lines, so `lines.length` and each index's line number are
+// preserved exactly (a naive whole-file stripComments(lines.join('\n')) would
+// swallow the newlines inside a multi-line block comment and desync every
+// finding's location after it).
+function stripBlockCommentsAcrossLines(lines) {
+  const result = [];
+  let inBlock = false;
+  for (const raw of lines) {
+    let out = '';
+    let idx = 0;
+    while (idx < raw.length) {
+      if (inBlock) {
+        const close = raw.indexOf('*/', idx);
+        if (close === -1) {
+          idx = raw.length;
+        } else {
+          idx = close + 2;
+          inBlock = false;
+        }
+        continue;
+      }
+      const blockOpen = raw.indexOf('/*', idx);
+      const lineComment = raw.indexOf('//', idx);
+      if (lineComment !== -1 && (blockOpen === -1 || lineComment < blockOpen)) {
+        out += raw.slice(idx, lineComment);
+        break;
+      }
+      if (blockOpen === -1) {
+        out += raw.slice(idx);
+        break;
+      }
+      out += raw.slice(idx, blockOpen);
+      const blockClose = raw.indexOf('*/', blockOpen + 2);
+      if (blockClose === -1) {
+        inBlock = true;
+        break;
+      }
+      idx = blockClose + 2;
+    }
+    result.push(out);
+  }
+  return result;
+}
+
 export function checkKafkaSendTimeout(fileContexts) {
   const findings = [];
 
@@ -158,9 +224,9 @@ export function checkKafkaSendTimeout(fileContexts) {
     const content = lines.join('\n');
     if (!KAFKA_LIKE_RE.test(content)) continue;
 
+    const strippedLines = stripBlockCommentsAcrossLines(lines);
     for (let i = 0; i < lines.length; i++) {
-      const stripped = stripComments(lines[i]);
-      if (SEND_GET_NO_TIMEOUT_RE.test(stripped)) {
+      if (SEND_GET_NO_TIMEOUT_RE.test(strippedLines[i])) {
         findings.push({
           severity: 'critical',
           rule: 'kafka-send-timeout',
