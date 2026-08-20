@@ -16,6 +16,7 @@ import { RULES, RULE_FN_ALIASES } from '../src/scanner.js';
 import { checkBlocking } from '../src/rules/blocking.js';
 import { checkKafkaSendTimeout } from '../src/rules/kafka.js';
 import { checkReactorBlock } from '../src/rules/reactor-block.js';
+import { checkObservability } from '../src/rules/observability.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI = join(__dirname, '../bin/cli.js');
@@ -417,7 +418,81 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
 }
 {
   const json = runOnFixture('ObservabilityFalsePositive.java', 'observability');
-  assert(json.issues.length === 0, 'ObservabilityFalsePositive.java produces 0 findings');
+  assert(json.issues.length === 0, 'ObservabilityFalsePositive.java produces 0 findings (includes the URL-path-variable and multi-line array-literal cases)');
+}
+{
+  // Multi-line array-literal annotation argument (real corpus shape:
+  // spring-boot-modules/.../SpaForwardController.java:9) with real logging
+  // in the method body — the { that opens the RequestMethod array must not
+  // be mistaken for the method body's opening brace. Checked directly
+  // against the detector, with a location check to confirm the finding (if
+  // any) still anchors to the annotation's own line.
+  const fileContexts = [
+    {
+      filePath: 'MultiLineMappingLogged.java',
+      relativePath: 'MultiLineMappingLogged.java',
+      lines: [
+        'package com.example;',
+        '',
+        'import org.springframework.web.bind.annotation.RestController;',
+        'import org.springframework.web.bind.annotation.RequestMapping;',
+        'import org.springframework.web.bind.annotation.RequestMethod;',
+        'import org.slf4j.Logger;',
+        'import org.slf4j.LoggerFactory;',
+        '',
+        '@RestController',
+        'public class MultiLineMappingLogged {',
+        '    private static final Logger log = LoggerFactory.getLogger(MultiLineMappingLogged.class);',
+        '',
+        '    @RequestMapping(path = "/hello", method = {',
+        '        RequestMethod.GET,',
+        '        RequestMethod.POST',
+        '    })',
+        '    public String hello() {',
+        '        log.info("hit");',
+        '        return "hello";',
+        '    }',
+        '}',
+      ],
+    },
+  ];
+  const findings = checkObservability(fileContexts);
+  assert(findings.length === 0, 'a multi-line array-literal mapping annotation with real logging in the body produces 0 findings');
+}
+{
+  // Same multi-line array-literal shape, but WITHOUT logging in the body
+  // (mirrors the real SpaForwardController.java:9 shape, which genuinely
+  // has no logging) — the fix must not silence a real missing-logging
+  // finding, and the location must still anchor to the annotation's line
+  // (13), not to wherever the brace-counting used to give up.
+  const fileContexts = [
+    {
+      filePath: 'MultiLineMappingUnlogged.java',
+      relativePath: 'MultiLineMappingUnlogged.java',
+      lines: [
+        'package com.example;',
+        '',
+        'import org.springframework.web.bind.annotation.RestController;',
+        'import org.springframework.web.bind.annotation.RequestMapping;',
+        'import org.springframework.web.bind.annotation.RequestMethod;',
+        '',
+        '@RestController',
+        'public class MultiLineMappingUnlogged {',
+        '',
+        '    @RequestMapping(path = "/hello", method = {',
+        '        RequestMethod.GET,',
+        '        RequestMethod.POST',
+        '    })',
+        '    public String hello() {',
+        '        return "hello";',
+        '    }',
+        '}',
+      ],
+    },
+  ];
+  const findings = checkObservability(fileContexts);
+  assert(findings.length === 1, 'the same multi-line array-literal mapping annotation WITHOUT logging still produces exactly 1 finding');
+  assert(findings[0].location === 'MultiLineMappingUnlogged.java:10', 'the finding still anchors to the annotation\'s own line (10), unaffected by the multi-line body extraction');
 }
 
 // transactions ─────────────────────────────────────────────────────────────
