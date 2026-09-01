@@ -30,9 +30,7 @@ export function checkBlocking(fileContexts) {
     for (let i = 0; i < lines.length; i++) {
       // Issue #9: strip comments before the anchor test — a comment merely
       // mentioning "@Scheduled"/"@KafkaListener"/etc. (e.g. explaining what a
-      // fixture does NOT contain) must not open a detection window. The
-      // window scan below (BLOCKING_PATTERNS) is intentionally left as-is —
-      // out of scope for this fix, see issue #9's discussion.
+      // fixture does NOT contain) must not open a detection window.
       const code = stripComments(lines[i]);
       for (const { re, name } of ASYNC_ANNOTATIONS) {
         if (re.test(code)) {
@@ -51,8 +49,23 @@ export function checkBlocking(fileContexts) {
         // Stop if we hit another top-level annotation (new method boundary)
         if (i > lineIdx + 3 && trimmed.startsWith('@') && ASYNC_ANNOTATIONS.some(a => a.re.test(trimmed))) break;
 
+        // Issue #11 / A3.1: strip comments before the BLOCKING_PATTERNS test —
+        // same fix as the anchor test above (issue #9), applied to the site
+        // that was explicitly left out of scope back then. The
+        // trimmed.startsWith('//')/('*') skip a few lines up only catches a
+        // comment that is the ENTIRE line; it doesn't catch a trailing "//"
+        // comment after real code, or a single-line "/* ... */" comment not
+        // prefixed with "*". stripComments() (already used for the anchor
+        // test) closes both gaps here too.
+        //
+        // NOT fixed by this change (A3.2, still open): the window itself does
+        // not track real method boundaries — a blocking call in a subsequent,
+        // unannotated method within the same 60-line window is still
+        // misattributed to this annotation. See
+        // BlockingWindowMisattributionProbe.java in the test fixtures.
+        const windowCode = stripComments(lines[i]);
         for (const { re, name } of BLOCKING_PATTERNS) {
-          if (re.test(lines[i])) {
+          if (re.test(windowCode)) {
             findings.push({
               severity: 'critical',
               rule: annotationName === '@KafkaListener' ? 'blocking-kafka' : 'blocking',

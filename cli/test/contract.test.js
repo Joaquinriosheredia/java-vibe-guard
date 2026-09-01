@@ -547,6 +547,62 @@ console.log('\n📋 Test 5a3: multi-line block-comment gate regression guard (tr
   assert(json.issues.length === 0, '--rule transactions on TransactionsBlockCommentGateProbe.java produces 0 findings');
 }
 
+// ─── Test 5a4: BLOCKING_PATTERNS window comment-stripping (issue #11 / A3.1)
+// blocking.js's anchor test (@Scheduled/@KafkaListener/@Async/@EventListener)
+// was already comment-safe since issue #9 — but the BLOCKING_PATTERNS window
+// scan a few lines below it was explicitly left unprotected back then (see
+// blocking.js's issue #9 comment, pre-this-fix). A3.1 applies the exact same
+// stripComments() fix to that second site. BlockingWindowCommentProbe.java
+// reproduces both comment shapes that tripped it: a trailing "//" comment
+// after real code, and a single-line "/* ... */" comment not "*"-prefixed —
+// neither is caught by the window loop's pre-existing
+// trimmed.startsWith('//')/('*') whole-line skip.
+console.log('\n📋 Test 5a4: BLOCKING_PATTERNS window comment-stripping (issue #11 / A3.1)');
+{
+  const json = runOnFixture('BlockingWindowCommentProbe.java', 'blocking-kafka');
+  assert(json.issues.length === 0, '--rule blocking-kafka on BlockingWindowCommentProbe.java produces 0 findings (issue #11 / A3.1)');
+}
+
+// ─── Test 5a5: real detection still fires on all 4 shared anchors (A3.1) ───
+// A3.1 touches the pattern-match site all four ASYNC_ANNOTATIONS funnel
+// through (the engine is shared, not per-annotation). @Scheduled and
+// @KafkaListener already have dedicated true-positive coverage
+// (BlockingTruePositive.java, KafkaBlockingProbe.java, asserted above) — this
+// closes the gap for @Async and @EventListener specifically, so the fix is
+// verified not to have silenced real detection on any of the four.
+console.log('\n📋 Test 5a5: real detection unaffected on @Async / @EventListener (A3.1)');
+{
+  const json = runOnFixture('BlockingAsyncEventListenerTruePositive.java', 'blocking');
+  assert(json.issues.length === 2, 'BlockingAsyncEventListenerTruePositive.java produces exactly 2 findings (@Async + @EventListener)');
+  if (json.issues.length === 2) {
+    assert(json.issues.some(i => i.message.includes('@Async')), 'one finding is inside the @Async method');
+    assert(json.issues.some(i => i.message.includes('@EventListener')), 'one finding is inside the @EventListener method');
+  }
+}
+
+// ─── Test 5a6: A3.2 (window/method-boundary misattribution) is NOT fixed by
+// A3.1 — known limitation, documented on purpose ──────────────────────────
+// This is a regression guard in the opposite direction from the rest of this
+// file: it asserts the BUG is still present, so A3.1 doesn't get silently
+// mistaken for a full fix of blocking.js's window scan. The
+// BLOCKING_PATTERNS window only stops early on hitting ANOTHER annotated
+// line — it does not track the annotated method's actual closing brace, so a
+// blocking call in a later, unrelated, unannotated method within the same
+// 60-line window is still misattributed to the annotation above it.
+// unrelatedHelper()'s Thread.sleep() is real code, not a comment —
+// stripComments() does nothing for it. Fixing this for real is A3.2,
+// tracked separately and NOT part of this commit. If this assertion ever
+// starts failing (0 findings instead of 1), A3.2 was fixed — update this
+// test to reflect that deliberately, don't just delete it.
+console.log('\n📋 Test 5a6: A3.2 window misattribution — known limitation, still open');
+{
+  const json = runOnFixture('BlockingWindowMisattributionProbe.java', 'blocking-kafka');
+  assert(json.issues.length === 1, 'BlockingWindowMisattributionProbe.java still produces 1 (incorrect) finding — A3.2 not fixed by this commit');
+  if (json.issues.length === 1) {
+    assert(json.issues[0].location.includes('BlockingWindowMisattributionProbe.java'), 'the misattributed finding is still reported against this fixture');
+  }
+}
+
 // ─── Test 5b: --rule post-filter — blocking vs blocking-kafka (issue #7) ────
 // KafkaBlockingProbe.java produces a single blocking-kafka finding (a bare
 // .join() inside a @KafkaListener method — blocking.js:50 picks the rule id
@@ -930,10 +986,10 @@ console.log('\n📋 Test 19: zero regression on test-fixtures/ with no config fi
   const { stdout, exitCode } = run(['--json', FIXTURES]);
   const json = JSON.parse(stdout);
 
-  assert(json.summary.critical === 11, 'summary.critical is 11 (was 7: KafkaBlockingProbe.java blocking-kafka + 2 KafkaSendTimeoutTruePositive.java + 4 new ReactorBlockTruePositive.java findings)');
+  assert(json.summary.critical === 14, 'summary.critical is 14 (was 11: +2 BlockingAsyncEventListenerTruePositive.java @Async/@EventListener + 1 BlockingWindowMisattributionProbe.java A3.2 known-limitation finding — see issue #11 / A3.1)');
   assert(json.summary.major === 1, 'summary.major unchanged at 1');
-  assert(json.summary.warning === 5, 'summary.warning unchanged at 5');
-  assert(json.summary.reported === 17 && json.summary.total === 17, 'reported === total === 17 (was 13 before the reactor-block fixtures were added)');
+  assert(json.summary.warning === 8, 'summary.warning is 8 (was 5: +3 "kafka" rule missing-@RetryableTopic/DLQ warnings — incidental, from the 3 real @KafkaListener methods across the new A3.1 fixtures, not part of what A3.1 tests)');
+  assert(json.summary.reported === 23 && json.summary.total === 23, 'reported === total === 23 (was 17 before the A3.1 fixtures were added: +3 critical +3 warning)');
   assert(json.summary.suppressed === 0, 'suppressed is 0 — no config file, no directives');
   assert(exitCode === 1, 'exit code is 1, unchanged — real criticals still fail the build');
 }
