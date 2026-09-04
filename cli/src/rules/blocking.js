@@ -1,4 +1,5 @@
 import { stripComments } from './strip-comments.js';
+import { extractMethodBodyRange } from './method-body.js';
 
 const ASYNC_ANNOTATIONS = [
   { re: /@Scheduled\b/,    name: '@Scheduled' },
@@ -42,27 +43,24 @@ export function checkBlocking(fileContexts) {
     if (annotatedPositions.length === 0) continue;
 
     for (const { lineIdx, annotationName } of annotatedPositions) {
-      const windowEnd = Math.min(lineIdx + 60, lines.length);
-      for (let i = lineIdx + 1; i < windowEnd; i++) {
-        const trimmed = lines[i].trim();
-        if (trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
-        // Stop if we hit another top-level annotation (new method boundary)
-        if (i > lineIdx + 3 && trimmed.startsWith('@') && ASYNC_ANNOTATIONS.some(a => a.re.test(trimmed))) break;
+      // A3.2 (issue #11): the fixed 60-line window used to scan past the
+      // annotated method's real closing brace into whatever came next,
+      // misattributing a blocking call in a later, unannotated method to
+      // this annotation (see BlockingWindowMisattributionProbe.java's
+      // history). extractMethodBodyRange() replaces it with the method's
+      // real structural boundary — the "stop at the next annotation"
+      // heuristic this loop used to rely on as a partial mitigation is gone,
+      // superseded by the real boundary. The 60-line cap is still passed
+      // through, but now only as a safety bound on how far the boundary
+      // search itself goes (see method-body.js), not as the attribution
+      // limit.
+      const range = extractMethodBodyRange(lines, lineIdx, 60);
+      if (range === null) continue; // abstract/interface method — no body to scan
 
-        // Issue #11 / A3.1: strip comments before the BLOCKING_PATTERNS test —
-        // same fix as the anchor test above (issue #9), applied to the site
-        // that was explicitly left out of scope back then. The
-        // trimmed.startsWith('//')/('*') skip a few lines up only catches a
-        // comment that is the ENTIRE line; it doesn't catch a trailing "//"
-        // comment after real code, or a single-line "/* ... */" comment not
-        // prefixed with "*". stripComments() (already used for the anchor
-        // test) closes both gaps here too.
-        //
-        // NOT fixed by this change (A3.2, still open): the window itself does
-        // not track real method boundaries — a blocking call in a subsequent,
-        // unannotated method within the same 60-line window is still
-        // misattributed to this annotation. See
-        // BlockingWindowMisattributionProbe.java in the test fixtures.
+      for (let i = range.startLineIdx + 1; i <= range.endLineIdx; i++) {
+        // Issue #11 / A3.1: strip comments before the BLOCKING_PATTERNS test
+        // — a comment merely mentioning a blocking call name inside an
+        // otherwise-safe method must not fire. Unchanged by A3.2.
         const windowCode = stripComments(lines[i]);
         for (const { re, name } of BLOCKING_PATTERNS) {
           if (re.test(windowCode)) {

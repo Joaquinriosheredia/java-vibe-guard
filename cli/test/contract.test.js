@@ -580,27 +580,80 @@ console.log('\n📋 Test 5a5: real detection unaffected on @Async / @EventListen
   }
 }
 
-// ─── Test 5a6: A3.2 (window/method-boundary misattribution) is NOT fixed by
-// A3.1 — known limitation, documented on purpose ──────────────────────────
-// This is a regression guard in the opposite direction from the rest of this
-// file: it asserts the BUG is still present, so A3.1 doesn't get silently
-// mistaken for a full fix of blocking.js's window scan. The
-// BLOCKING_PATTERNS window only stops early on hitting ANOTHER annotated
-// line — it does not track the annotated method's actual closing brace, so a
-// blocking call in a later, unrelated, unannotated method within the same
-// 60-line window is still misattributed to the annotation above it.
-// unrelatedHelper()'s Thread.sleep() is real code, not a comment —
-// stripComments() does nothing for it. Fixing this for real is A3.2,
-// tracked separately and NOT part of this commit. If this assertion ever
-// starts failing (0 findings instead of 1), A3.2 was fixed — update this
-// test to reflect that deliberately, don't just delete it.
-console.log('\n📋 Test 5a6: A3.2 window misattribution — known limitation, still open');
+// ─── Test 5a6: A3.2 (window/method-boundary misattribution) — FIXED ───────
+// Was a regression guard in the opposite direction (asserting the bug was
+// still present, so A3.1 didn't get mistaken for a full fix). A3.2 replaced
+// blocking.js's fixed 60-line window with extractMethodBodyRange()'s real
+// structural boundary (method-body.js) — consume()'s scan now correctly
+// stops at its own closing brace and never reaches unrelatedHelper()'s
+// Thread.sleep() below it. This is a legitimate disappearance of a
+// misattributed finding, not a suppressed real one — see
+// BlockingWindowMisattributionProbe.java's own header comment. If this
+// assertion ever starts failing again (1 finding instead of 0), the
+// structural boundary regressed.
+console.log('\n📋 Test 5a6: A3.2 window misattribution — fixed');
 {
   const json = runOnFixture('BlockingWindowMisattributionProbe.java', 'blocking-kafka');
-  assert(json.issues.length === 1, 'BlockingWindowMisattributionProbe.java still produces 1 (incorrect) finding — A3.2 not fixed by this commit');
+  assert(json.issues.length === 0, 'BlockingWindowMisattributionProbe.java produces 0 findings — A3.2 fixed the structural misattribution');
+}
+
+// ─── Test 5a7-5a12: A3.2 structural extractor regression fixtures ─────────
+// One dedicated fixture per case from the A3.2 design (point 2), plus the
+// 4.b double-anchor preservation case and the 2.e safety-cap case. Each
+// asserted in isolation, same pattern as 5a2-5a6.
+console.log('\n📋 Test 5a7: A3.2 case (a) — multi-line annotation args');
+{
+  const json = runOnFixture('BlockingMultiLineAnnotationProbe.java', 'blocking');
+  assert(json.issues.length === 1, 'BlockingMultiLineAnnotationProbe.java produces exactly 1 finding');
   if (json.issues.length === 1) {
-    assert(json.issues[0].location.includes('BlockingWindowMisattributionProbe.java'), 'the misattributed finding is still reported against this fixture');
+    assert(json.issues[0].message.includes('@Scheduled'), 'the finding is inside the @Scheduled method');
+    assert(json.issues[0].location.endsWith(':17'), 'the finding anchors to the real Thread.sleep() line (17), past the multi-line annotation');
   }
+}
+
+console.log('\n📋 Test 5a8: A3.2 case (b) — stacked annotation with braces in its args');
+{
+  const json = runOnFixture('BlockingStackedAnnotationBracesProbe.java', 'blocking-kafka');
+  assert(json.issues.length === 1, 'BlockingStackedAnnotationBracesProbe.java produces exactly 1 finding');
+  if (json.issues.length === 1) {
+    assert(json.issues[0].ruleId === 'blocking-kafka', 'the finding has ruleId "blocking-kafka"');
+    assert(json.issues[0].location.endsWith(':25'), 'the finding anchors to the real Thread.sleep() line (25) — @RetryableTopic\'s array-literal brace was not mistaken for the method body');
+  }
+}
+
+console.log('\n📋 Test 5a9: A3.2 case (c) — modifiers/generics/throws between anchor and method');
+{
+  const json = runOnFixture('BlockingModifiersGenericsThrowsProbe.java', 'blocking');
+  assert(json.issues.length === 1, 'BlockingModifiersGenericsThrowsProbe.java produces exactly 1 finding');
+  if (json.issues.length === 1) {
+    assert(json.issues[0].message.includes('@Async'), 'the finding is inside the @Async method');
+  }
+}
+
+console.log('\n📋 Test 5a10: A3.2 case (d) — nested anonymous class inside the body');
+{
+  const json = runOnFixture('BlockingNestedAnonClassProbe.java', 'blocking');
+  assert(json.issues.length === 1, 'BlockingNestedAnonClassProbe.java produces exactly 1 finding');
+  if (json.issues.length === 1) {
+    assert(json.issues[0].message.includes('@EventListener'), 'the finding is inside the @EventListener method');
+  }
+}
+
+console.log('\n📋 Test 5a11: A3.2 case (4.b) — double anchor on the same method preserved');
+{
+  const json = runOnFixture('BlockingDoubleAnchorProbe.java', 'blocking');
+  assert(json.issues.length === 2, 'BlockingDoubleAnchorProbe.java produces exactly 2 findings (not collapsed to 1)');
+  if (json.issues.length === 2) {
+    assert(json.issues.every(i => i.location.endsWith(':20')), 'both findings anchor to the same real Thread.sleep() line (20)');
+    assert(json.issues.some(i => i.message.includes('@Async')), 'one finding is attributed to @Async');
+    assert(json.issues.some(i => i.message.includes('@Scheduled')), 'one finding is attributed to @Scheduled');
+  }
+}
+
+console.log('\n📋 Test 5a12: A3.2 case (2.e) — 60-line safety cap preserved for anomalously long methods');
+{
+  const json = runOnFixture('BlockingAnomalouslyLongMethodProbe.java', 'blocking');
+  assert(json.issues.length === 0, 'BlockingAnomalouslyLongMethodProbe.java produces 0 findings — the real Thread.sleep() sits past the 60-line safety cap, accepted best-effort limitation (2.e), not a crash or hang');
 }
 
 // ─── Test 5b: --rule post-filter — blocking vs blocking-kafka (issue #7) ────
@@ -986,10 +1039,10 @@ console.log('\n📋 Test 19: zero regression on test-fixtures/ with no config fi
   const { stdout, exitCode } = run(['--json', FIXTURES]);
   const json = JSON.parse(stdout);
 
-  assert(json.summary.critical === 14, 'summary.critical is 14 (was 11: +2 BlockingAsyncEventListenerTruePositive.java @Async/@EventListener + 1 BlockingWindowMisattributionProbe.java A3.2 known-limitation finding — see issue #11 / A3.1)');
-  assert(json.summary.major === 1, 'summary.major unchanged at 1');
-  assert(json.summary.warning === 8, 'summary.warning is 8 (was 5: +3 "kafka" rule missing-@RetryableTopic/DLQ warnings — incidental, from the 3 real @KafkaListener methods across the new A3.1 fixtures, not part of what A3.1 tests)');
-  assert(json.summary.reported === 23 && json.summary.total === 23, 'reported === total === 23 (was 17 before the A3.1 fixtures were added: +3 critical +3 warning)');
+  assert(json.summary.critical === 19, 'summary.critical is 19 (was 14 after A3.1: -1 BlockingWindowMisattributionProbe.java finding, legitimately gone now A3.2 fixed the misattribution, +6 from the 6 new A3.2 fixtures — BlockingMultiLineAnnotationProbe.java, BlockingStackedAnnotationBracesProbe.java, BlockingModifiersGenericsThrowsProbe.java, BlockingNestedAnonClassProbe.java each contribute 1, BlockingDoubleAnchorProbe.java contributes 2, BlockingAnomalouslyLongMethodProbe.java contributes 0 by design — see issue #11 / A3.2)');
+  assert(json.summary.major === 1, 'summary.major unchanged at 1 — none of the A3.2 fixtures touch layers.js');
+  assert(json.summary.warning === 8, 'summary.warning unchanged at 8 — verified none of the 6 new A3.2 fixtures trigger observability/layers/transactions/kafka/reactor-block incidentally (each uses @Service, groupId + @RetryableTopic where @KafkaListener appears, no @Controller/@Transactional)');
+  assert(json.summary.reported === 28 && json.summary.total === 28, 'reported === total === 28 (was 23 after A3.1: +6 critical -1 critical net +5)');
   assert(json.summary.suppressed === 0, 'suppressed is 0 — no config file, no directives');
   assert(exitCode === 1, 'exit code is 1, unchanged — real criticals still fail the build');
 }
