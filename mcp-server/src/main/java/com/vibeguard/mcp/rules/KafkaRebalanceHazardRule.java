@@ -28,8 +28,12 @@ import java.util.regex.Pattern;
  * Explicit exclusions:
  *   - @Test / @PostConstruct / main() → never flagged
  *   - groupId with a non-empty string value → missing-groupId CRITICAL suppressed
+ *   - id with a non-empty value, and idIsGroup not explicitly false → treated as
+ *     the effective groupId (framework default: idIsGroup() = true), suppressed
+ *   - groupId explicitly "" always wins as CRITICAL, even if id is also present
  *   - Blocking calls outside @KafkaListener methods → not flagged
- *   - Patterns in // comments or string literals → stripped by codeOnly()
+ *   - Patterns in // line comments, /* *&#47; and /** *&#47; block comments, or
+ *     string literals → stripped by stripComments()/blankStrings()
  *
  * groupId detection handles both single-line and multi-line @KafkaListener
  * annotations by accumulating lines until the annotation's parentheses close.
@@ -61,6 +65,18 @@ public class KafkaRebalanceHazardRule implements Rule {
     private static final Pattern GROUP_ID_EXPLICIT_EMPTY =
         Pattern.compile("groupId\\s*=\\s*\"\"");
 
+    // id() with a non-empty value. Per the framework's own Javadoc
+    // (KafkaListener.idIsGroup(), default true): "When groupId is not provided,
+    // use the id (if provided) as the group.id property... Set to false, to use
+    // the group.id from the consumer factory." So an explicit id acts as the
+    // effective groupId unless idIsGroup = false overrides that.
+    private static final Pattern ID_VALID =
+        Pattern.compile("\\bid\\s*=\\s*\"[^\"]+\"");
+
+    // idIsGroup explicitly disabled — id must NOT be treated as the effective groupId.
+    private static final Pattern ID_IS_GROUP_FALSE =
+        Pattern.compile("idIsGroup\\s*=\\s*false\\b");
+
     // Blocking calls that stall the listener thread beyond max.poll.interval.ms.
     // Same detection surface as ConnectionPoolStarvationRule — any call that blocks
     // the calling thread for an unpredictable duration is a rebalance risk here.
@@ -89,7 +105,8 @@ public class KafkaRebalanceHazardRule implements Rule {
         List<Issue> issues = new ArrayList<>();
         List<String> lines = file.lines();
 
-        int braceDepth = 0;
+        int     braceDepth      = 0;
+        boolean inBlockComment  = false;
 
         // Annotation accumulation state (outside methods)
         boolean       pendingExcluded           = false;
@@ -112,10 +129,13 @@ public class KafkaRebalanceHazardRule implements Rule {
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i);
             String trim = line.strip();
-            // raw: comments stripped but string values kept — used for groupId detection
-            String raw  = noComment(trim);
+            // raw: // and /* */ comments stripped, string values kept — used for groupId detection.
+            // Block-comment state carries across lines via inBlockComment.
+            StrippedLine stripped = stripComments(trim, inBlockComment);
+            inBlockComment = stripped.inBlockComment();
+            String raw     = stripped.text();
             // code: comments + string contents stripped — used for pattern detection
-            String code = codeOnly(trim);
+            String code = blankStrings(raw);
 
             // --- Annotation tracking (outside method bodies) ---
             if (!inMethod) {
@@ -132,7 +152,7 @@ public class KafkaRebalanceHazardRule implements Rule {
                     }
                     if (kafkaParenDepth == 0) {
                         // Single-line or no-paren annotation — accumulation complete
-                        pendingGroupIdValid         = GROUP_ID_VALID.matcher(kafkaAnnotBuf).find();
+                        pendingGroupIdValid         = isGroupIdEffectivelyValid(kafkaAnnotBuf);
                         pendingGroupIdExplicitEmpty = !pendingGroupIdValid
                             && GROUP_ID_EXPLICIT_EMPTY.matcher(kafkaAnnotBuf).find();
                     }
@@ -144,7 +164,7 @@ public class KafkaRebalanceHazardRule implements Rule {
                         else if (c == ')' && kafkaParenDepth > 0) kafkaParenDepth--;
                     }
                     if (kafkaParenDepth == 0) {
-                        pendingGroupIdValid         = GROUP_ID_VALID.matcher(kafkaAnnotBuf).find();
+                        pendingGroupIdValid         = isGroupIdEffectivelyValid(kafkaAnnotBuf);
                         pendingGroupIdExplicitEmpty = !pendingGroupIdValid
                             && GROUP_ID_EXPLICIT_EMPTY.matcher(kafkaAnnotBuf).find();
                     }
@@ -229,16 +249,84 @@ public class KafkaRebalanceHazardRule implements Rule {
         return issues;
     }
 
-    /** Strips // line comments; preserves string literal content (needed for groupId check). */
-    private static String noComment(String trimmed) {
-        int idx = trimmed.indexOf("//");
-        return idx >= 0 ? trimmed.substring(0, idx) : trimmed;
+    /**
+     * Whether the accumulated @KafkaListener annotation text has an effective groupId.
+     * Framework rule (KafkaListener.idIsGroup(), default true): an explicit id() acts
+     * as the effective groupId unless idIsGroup = false is set. An explicit empty
+     * groupId = "" always wins as invalid, regardless of id.
+     */
+    private static boolean isGroupIdEffectivelyValid(CharSequence annotationText) {
+        if (GROUP_ID_EXPLICIT_EMPTY.matcher(annotationText).find()) return false;
+        if (GROUP_ID_VALID.matcher(annotationText).find())          return true;
+        return ID_VALID.matcher(annotationText).find()
+            && !ID_IS_GROUP_FALSE.matcher(annotationText).find();
     }
 
-    /** Strips // line comments AND string literal contents (for blocking-call pattern matching). */
-    private static String codeOnly(String trimmed) {
-        int commentIdx = trimmed.indexOf("//");
-        String noComment = commentIdx >= 0 ? trimmed.substring(0, commentIdx) : trimmed;
-        return noComment.replaceAll("\"[^\"]*\"", "\"\"");
+    /**
+     * Result of stripping comments from one line: {@code text} is the line with //
+     * and block comments removed (string literal contents preserved), and
+     * {@code inBlockComment} is the carry-over state for the next line.
+     */
+    private record StrippedLine(String text, boolean inBlockComment) {}
+
+    /**
+     * Character-by-character state machine that strips // line comments and /* *&#47;
+     * (including /** *&#47; Javadoc) block comments, respecting string literal
+     * boundaries so a comment marker inside a string is never mistaken for a real
+     * comment. Block-comment state carries across lines via the returned
+     * {@code inBlockComment} flag, which callers thread back in on the next line.
+     * Does not touch the caller's {@code line}/{@code trim} — those stay untouched
+     * for braceDepth counting.
+     */
+    private static StrippedLine stripComments(String trimmedLine, boolean startedInBlockComment) {
+        StringBuilder out = new StringBuilder(trimmedLine.length());
+        boolean inBlockComment = startedInBlockComment;
+        boolean inString       = false;
+        int n = trimmedLine.length();
+        int i = 0;
+        while (i < n) {
+            char c = trimmedLine.charAt(i);
+
+            if (inBlockComment) {
+                if (c == '*' && i + 1 < n && trimmedLine.charAt(i + 1) == '/') {
+                    inBlockComment = false;
+                    i += 2;
+                } else {
+                    i++;
+                }
+                continue;
+            }
+
+            if (inString) {
+                out.append(c);
+                if (c == '\\' && i + 1 < n) {
+                    // Keep escape sequences intact so a "\"" doesn't end the string early.
+                    out.append(trimmedLine.charAt(i + 1));
+                    i += 2;
+                    continue;
+                }
+                if (c == '"') inString = false;
+                i++;
+                continue;
+            }
+
+            if (c == '/' && i + 1 < n && trimmedLine.charAt(i + 1) == '/') {
+                break; // line comment — rest of the line is discarded
+            }
+            if (c == '/' && i + 1 < n && trimmedLine.charAt(i + 1) == '*') {
+                inBlockComment = true;
+                i += 2;
+                continue;
+            }
+            if (c == '"') inString = true;
+            out.append(c);
+            i++;
+        }
+        return new StrippedLine(out.toString(), inBlockComment);
+    }
+
+    /** Blanks string literal contents (for blocking-call/annotation pattern matching). */
+    private static String blankStrings(String text) {
+        return text.replaceAll("\"[^\"]*\"", "\"\"");
     }
 }

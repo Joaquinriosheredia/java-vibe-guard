@@ -132,6 +132,64 @@ class KafkaRebalanceHazardRuleTest {
     }
 
     // -------------------------------------------------------------------------
+    // id() acting as the effective groupId (framework default: idIsGroup() = true)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void listenerWithIdActingAsGroupIdIsNeverFlagged() {
+        String code = """
+            package com.example;
+            import org.springframework.kafka.annotation.KafkaListener;
+
+            public class Svc {
+                @KafkaListener(id = "fooGroup", topics = "orders")
+                public void handle(String msg) {
+                    System.out.println(msg);
+                }
+            }
+            """;
+        assertThat(rule.analyze(FileContent.of("Svc.java", code))).isEmpty();
+    }
+
+    @Test
+    void listenerWithIdAndIdIsGroupFalseStillWarns() {
+        String code = """
+            package com.example;
+            import org.springframework.kafka.annotation.KafkaListener;
+
+            public class Svc {
+                @KafkaListener(id = "fooGroup", idIsGroup = false, topics = "orders")
+                public void handle(String msg) {
+                    System.out.println(msg);
+                }
+            }
+            """;
+        List<Issue> issues = rule.analyze(FileContent.of("Svc.java", code));
+        assertThat(issues).hasSize(1);
+        assertThat(issues.getFirst().severity()).isEqualTo("WARNING");
+        assertThat(issues.getFirst().message()).contains("groupId not found in @KafkaListener annotation");
+    }
+
+    @Test
+    void listenerWithEmptyGroupIdAndIdIsStillCritical() {
+        String code = """
+            package com.example;
+            import org.springframework.kafka.annotation.KafkaListener;
+
+            public class Svc {
+                @KafkaListener(id = "fooGroup", groupId = "", topics = "orders")
+                public void handle(String msg) {
+                    System.out.println(msg);
+                }
+            }
+            """;
+        List<Issue> issues = rule.analyze(FileContent.of("Svc.java", code));
+        assertThat(issues).hasSize(1);
+        assertThat(issues.getFirst().severity()).isEqualTo("CRITICAL");
+        assertThat(issues.getFirst().message()).contains("groupId");
+    }
+
+    // -------------------------------------------------------------------------
     // True positives — blocking call inside @KafkaListener → CRITICAL
     // -------------------------------------------------------------------------
 
@@ -312,6 +370,39 @@ class KafkaRebalanceHazardRuleTest {
                 @KafkaListener(topics = "t", groupId = "valid-group")
                 public void handle(String msg) {
                     // avoid groupId = "" — always use an explicit consumer group
+                    System.out.println(msg);
+                }
+            }
+            """;
+        assertThat(rule.analyze(FileContent.of("Svc.java", code))).isEmpty();
+    }
+
+    @Test
+    void kafkaListenerInSingleLineBlockCommentIsNeverFlagged() {
+        String code = """
+            package com.example;
+
+            public class Svc {
+                /* @KafkaListener(topics = "orders") */
+                public void handle(String msg) {
+                    System.out.println(msg);
+                }
+            }
+            """;
+        assertThat(rule.analyze(FileContent.of("Svc.java", code))).isEmpty();
+    }
+
+    @Test
+    void kafkaListenerInMultilineJavadocIsNeverFlagged() {
+        String code = """
+            package com.example;
+
+            public class Svc {
+                /**
+                 * Example: {@code @KafkaListener(topics = "orders")}
+                 * Do not use this pattern.
+                 */
+                public void handle(String msg) {
                     System.out.println(msg);
                 }
             }
