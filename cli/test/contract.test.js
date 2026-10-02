@@ -10,9 +10,10 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { mkdtempSync, copyFileSync, rmSync, writeFileSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
+import { ledgerTotals, breakdownFromJson, diffAgainstLedger } from './fixture-ledger.js';
 import { applySuppressions } from '../src/suppression.js';
 import { loadConfig } from '../src/config.js';
-import { RULES, RULE_FN_ALIASES } from '../src/scanner.js';
+import { RULES, RULE_FN_ALIASES, dropFindingsShadowedByReactorBlock } from '../src/scanner.js';
 import { checkBlocking } from '../src/rules/blocking.js';
 import { checkKafkaSendTimeout } from '../src/rules/kafka.js';
 import { checkReactorBlock } from '../src/rules/reactor-block.js';
@@ -1033,16 +1034,75 @@ console.log('\n📋 Test 18: malformed vibeguard.config.json does not break the 
   assert(exitCode === 1, 'exit code is 1 — malformed config does not mask a real critical');
 }
 
+// ─── Test 18b (0a): typed Future.get() and reactor-block dedup ───────────────
+console.log('\n📋 Test 18b: Future.get() on Future-typed receivers; .block() reported once');
+{
+  // Coverage lost in 7a18298 (issue #5), restored without its false positive.
+  const tp = runOnFixture('BlockingFutureGetTruePositive.java', 'blocking');
+  const tpLines = tp.issues.map(i => Number(i.location.split(':').pop())).sort((a, b) => a - b);
+  assert(tp.issues.length === 4, `BlockingFutureGetTruePositive.java: 4 blocking findings (local, field, var, chained): got ${tp.issues.length}`);
+  assert(tpLines.join(',') === '26,32,39,44', `findings on the four .get() lines 26,32,39,44: got ${tpLines.join(',')}`);
+  assert(tp.issues.every(i => i.message.startsWith('blocking Future.get() detected in @')), 'message names Future.get() and the async anchor');
+
+  const dir = mkdtempSync(join(tmpdir(), 'vibe-guard-fixture-'));
+  try {
+    copyFileSync(join(FIXTURES, 'BlockingFutureGetFalsePositive.java'), join(dir, 'BlockingFutureGetFalsePositive.java'));
+    const fp = JSON.parse(run(['--json', dir]).stdout);
+    assert(fp.issues.length === 0, `BlockingFutureGetFalsePositive.java: 0 findings from any rule (Optional/Map/timed get/comment/name): got ${fp.issues.length}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  // Dedup: full rule set on the duplicate probe.
+  const dupDir = mkdtempSync(join(tmpdir(), 'vibe-guard-fixture-'));
+  try {
+    copyFileSync(join(FIXTURES, 'ReactorBlockAsyncDuplicateProbe.java'), join(dupDir, 'ReactorBlockAsyncDuplicateProbe.java'));
+    const all = JSON.parse(run(['--json', dupDir]).stdout);
+    const at19 = all.issues.filter(i => i.location.endsWith(':19'));
+    assert(at19.length === 1 && at19[0].ruleId === 'reactor-block', `Mono.block() line 19 reported once, as reactor-block: got ${at19.map(i => i.ruleId).join(',') || 'none'}`);
+    const at20 = all.issues.filter(i => i.location.endsWith(':20'));
+    assert(at20.length === 1 && at20[0].ruleId === 'blocking', 'Thread.sleep() on line 20 is a different call — still reported under blocking');
+    assert(all.summary.reported === 2, `2 findings in total: got ${all.summary.reported}`);
+
+    const onlyBlocking = JSON.parse(run(['--json', '--rule', 'blocking', dupDir]).stdout);
+    assert(
+      onlyBlocking.issues.some(i => i.location.endsWith(':19')),
+      '--rule blocking alone (reactor-block not run) still reports the .block() under blocking'
+    );
+  } finally {
+    rmSync(dupDir, { recursive: true, force: true });
+  }
+
+  // Unit level: only the reactive .block* message is shadowed, never other calls.
+  const loc = 'Svc.java:10';
+  const kept = dropFindingsShadowedByReactorBlock([
+    { rule: 'reactor-block', location: loc, message: "Reactive blocking call '.block()' inside Spring bean" },
+    { rule: 'blocking', location: loc, message: 'blocking .block() detected in @Async method' },
+    { rule: 'blocking', location: loc, message: 'Thread.sleep() detected in @Async method' },
+    { rule: 'blocking', location: 'Svc.java:11', message: 'blocking .block() detected in @Async method' },
+  ]);
+  assert(kept.length === 3, `dedup drops only the shadowed .block() finding: kept ${kept.length}`);
+  assert(!kept.some(f => f.location === loc && f.message.startsWith('blocking .block()')), 'shadowed .block() on the reactor-block line is gone');
+  assert(kept.some(f => f.message.startsWith('Thread.sleep()')), 'Thread.sleep() on the same line is kept');
+  assert(kept.some(f => f.location === 'Svc.java:11'), '.block() on a line without reactor-block is kept');
+}
+
 // ─── Test 19: zero regression on test-fixtures/ (no vibeguard.config.json) ─
 console.log('\n📋 Test 19: zero regression on test-fixtures/ with no config file present');
 {
   const { stdout, exitCode } = run(['--json', FIXTURES]);
   const json = JSON.parse(stdout);
 
-  assert(json.summary.critical === 19, 'summary.critical is 19 (was 14 after A3.1: -1 BlockingWindowMisattributionProbe.java finding, legitimately gone now A3.2 fixed the misattribution, +6 from the 6 new A3.2 fixtures — BlockingMultiLineAnnotationProbe.java, BlockingStackedAnnotationBracesProbe.java, BlockingModifiersGenericsThrowsProbe.java, BlockingNestedAnonClassProbe.java each contribute 1, BlockingDoubleAnchorProbe.java contributes 2, BlockingAnomalouslyLongMethodProbe.java contributes 0 by design — see issue #11 / A3.2)');
-  assert(json.summary.major === 1, 'summary.major unchanged at 1 — none of the A3.2 fixtures touch layers.js');
-  assert(json.summary.warning === 8, 'summary.warning unchanged at 8 — verified none of the 6 new A3.2 fixtures trigger observability/layers/transactions/kafka/reactor-block incidentally (each uses @Service, groupId + @RetryableTopic where @KafkaListener appears, no @Controller/@Transactional)');
-  assert(json.summary.reported === 28 && json.summary.total === 28, 'reported === total === 28 (was 23 after A3.1: +6 critical -1 critical net +5)');
+  // Per-fixture, per-rule, per-severity accounting lives in fixture-ledger.js
+  // (history: 28 after A3.2 — see that file and issue #11; 34 after 0a: +4
+  // BlockingFutureGetTruePositive.java, +2 ReactorBlockAsyncDuplicateProbe.java).
+  const EXPECTED = ledgerTotals();
+  const ledgerDiff = diffAgainstLedger(breakdownFromJson(json));
+  assert(ledgerDiff.length === 0, `findings match fixture-ledger.js exactly${ledgerDiff.length ? ':\n    ' + ledgerDiff.join('\n    ') : ''}`);
+  assert(json.summary.critical === EXPECTED.critical, `summary.critical is ${EXPECTED.critical}: got ${json.summary.critical}`);
+  assert(json.summary.major === EXPECTED.major, `summary.major is ${EXPECTED.major}: got ${json.summary.major}`);
+  assert(json.summary.warning === EXPECTED.warning, `summary.warning is ${EXPECTED.warning}: got ${json.summary.warning}`);
+  assert(json.summary.reported === EXPECTED.total && json.summary.total === EXPECTED.total, `reported === total === ${EXPECTED.total}`);
   assert(json.summary.suppressed === 0, 'suppressed is 0 — no config file, no directives');
   assert(exitCode === 1, 'exit code is 1, unchanged — real criticals still fail the build');
 }

@@ -48,6 +48,28 @@ export const RULES = [
 // would run the same fileContexts through checkBlocking twice.
 export const RULE_FN_ALIASES = { 'blocking-kafka': 'blocking' };
 
+// blocking.js and reactor-block.js both match a reactive .block()/
+// .blockFirst()/.blockLast() — e.g. Mono.block() inside an @Async method of a
+// @RestController reported the same call twice (java-vibe-guard-demo,
+// ReactiveController.java:14). When both fire on the same location for that
+// same call, only reactor-block (the more specific diagnosis) is kept. Other
+// blocking findings on that line (Thread.sleep(), .join(), Future.get()) are
+// a different call and are never dropped. Only applies when both rules ran:
+// `--rule blocking` alone still reports the .block() under blocking.
+const REACTIVE_BLOCKING_MESSAGE_RE = /^blocking \.(block|blockFirst|blockLast)\(\)/;
+
+export function dropFindingsShadowedByReactorBlock(findings) {
+  const reactorLocations = new Set(
+    findings.filter(f => f.rule === 'reactor-block').map(f => f.location)
+  );
+  if (reactorLocations.size === 0) return findings;
+  return findings.filter(f =>
+    !((f.rule === 'blocking' || f.rule === 'blocking-kafka')
+      && reactorLocations.has(f.location)
+      && REACTIVE_BLOCKING_MESSAGE_RE.test(f.message))
+  );
+}
+
 const VALID_RULE_IDS = Object.keys(RULE_CATALOG);
 
 const DEFAULT_IGNORED_DIRS = new Set([
@@ -138,7 +160,8 @@ export async function runGuard(projectPath, opts = {}) {
   // than detector implementation. If a detector emits an
   // unexpected ruleId, that finding will not match the requested
   // filter.
-  const selectedFindings = only ? allFindings.filter(f => f.rule === only) : allFindings;
+  const dedupedFindings = dropFindingsShadowedByReactorBlock(allFindings);
+  const selectedFindings = only ? dedupedFindings.filter(f => f.rule === only) : dedupedFindings;
 
   const decorated = applySuppressions(selectedFindings, fileContexts, config);
 
