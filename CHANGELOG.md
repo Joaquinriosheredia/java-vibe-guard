@@ -1,5 +1,57 @@
 # Changelog
 
+## 2.0.0
+
+First npm release since 1.0.3 (2026-06-12). npm 1.0.3 was published from an
+older commit than the repo's own `1.0.3`: it lacked `--verify`,
+`--format sarif`, `--explain`, `--baseline` and the `reactor-block` and
+`kafka-send-timeout` rules. 2.0.0 is the repo's current state, published as
+one version on both channels (npm `2.0.0`, Action `@v2` / `@v2.0.0`).
+
+### Breaking — may turn a green CI red (why this is a major)
+
+- **Two new CRITICAL rules run by default:** `reactor-block` (`.block()`,
+  `.blockFirst()`, `.blockLast()`, `.toFuture().get()` in a Spring bean that
+  imports Reactor) and `kafka-send-timeout` (`.send(...).get()` with no
+  timeout). Projects pinned to `^1.0.3` or Action `@v1` keep 1.x behavior;
+  stay there until you are ready, or suppress per finding.
+- **`blocking` changed how it detects `.get()`.** 1.0.3 flagged any `.get()`
+  inside an async method, including `Optional.get()`/`Map.get()` (#5).
+  2.0.0 flags `.get()` only on receivers the same file declares with a
+  `Future`, `CompletableFuture`, `ListenableFuture` (and similar) type, plus
+  `CompletableFuture.xxxAsync(...).get()` chains. Timed
+  `get(timeout, unit)` calls are not flagged. Net effect: fewer findings on
+  non-Future `.get()`; Future `.get()` calls declared in another file are no
+  longer detected (known gap: no cross-file type resolution).
+
+### Added (already in the repo since 1.0.3, first time on npm)
+
+- `--format sarif` (SARIF 2.1.0), `--explain <rule>`, `--baseline`, `--verbose`.
+- `--verify VIBE-001`: reproduces connection-pool starvation in a bundled
+  Spring Boot app against a Postgres container. Requires Docker 24+,
+  Java 17+ and Maven on PATH.
+- Rules `reactor-block` and `kafka-send-timeout` (see Breaking).
+
+### Changed
+
+- `testcontainers-doctor` is now a dependency (pinned to `1.0.0`: `--verify`
+  parses its output text) — no global install needed.
+- `--verify` runs the bundled app from a temp copy, so it works from a
+  read-only install and leaves no build output in the package.
+- The npm package ships only `bin/`, `src/`, `verify/` and `README.md`
+  (1.0.3 also shipped tests and fixtures).
+- MCP server version aligned to 2.0.0 (jar attached to the GitHub release).
+
+### Fixed
+
+- The same `Mono.block()` was reported twice (`blocking` and `reactor-block`)
+  when inside an `@Async` method of a Spring bean. Only `reactor-block` is
+  reported now; other blocking calls on that line still are.
+- `--help` listed 6 of the 8 rule ids for `--rule`.
+- Three CLI test suites were failing unnoticed because `npm test` ran only
+  `contract.test.js`; it now runs every suite, and CI smoke-tests the packed
+  tarball installed in a clean project (including a real `--verify`).
+
 ## CLI stabilization
 
 Stabilized the CLI engine (Layer 2 / GitHub Action) before starting
