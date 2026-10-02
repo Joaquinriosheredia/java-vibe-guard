@@ -1,16 +1,38 @@
 import { spawn, execFileSync } from 'child_process';
+import { createRequire } from 'module';
+import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import chalk from 'chalk';
 
 const __dirname  = dirname(fileURLToPath(import.meta.url));
-const VERIFY_DIR = join(__dirname, '../../verify');
+// verify/ lives inside cli/ (moved in 2.0.0) so it ships in the npm package;
+// it used to sit at the repo root, outside cli/, and `npm publish` from cli/
+// would have left --verify unable to find its registry.
+const VERIFY_DIR = join(__dirname, '../verify');
+const require    = createRequire(import.meta.url);
 
 // ── PASO 1 helpers ───────────────────────────────────────────────────────────
 
+// testcontainers-doctor is a dependency of this package (pinned: verify
+// parses its message text). Resolve its bin from node_modules and run it with
+// this same Node binary — no global install needed. Falls back to a binary on
+// PATH only if the dependency is missing (e.g. a checkout without npm ci).
+function tcDoctorCommand() {
+  try {
+    const pkgPath = require.resolve('testcontainers-doctor/package.json');
+    const { bin } = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    const binRel  = typeof bin === 'string' ? bin : bin['testcontainers-doctor'];
+    return { cmd: process.execPath, args: [join(dirname(pkgPath), binRel)] };
+  } catch {
+    return { cmd: 'testcontainers-doctor', args: [] };
+  }
+}
+
 function runTCDoctor() {
   return new Promise((resolve) => {
-    const tc = spawn('testcontainers-doctor', ['--json', '--no-color'], { timeout: 15_000 });
+    const { cmd, args } = tcDoctorCommand();
+    const tc = spawn(cmd, [...args, '--json', '--no-color'], { timeout: 15_000 });
     let out = '';
     tc.stdout.on('data', (d) => { out += d; });
     tc.on('close', () => {
@@ -110,7 +132,7 @@ export async function runVerify(rule) {
   const tc = await runTCDoctor();
 
   if (!tc) {
-    console.log(chalk.red('✗ testcontainers-doctor not found — run: npm install -g testcontainers-doctor'));
+    console.log(chalk.red('✗ testcontainers-doctor could not be run — reinstall java-vibe-guard (it ships as a dependency)'));
     return 2;
   }
 

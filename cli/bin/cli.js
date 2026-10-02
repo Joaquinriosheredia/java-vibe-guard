@@ -6,6 +6,7 @@ import { dirname, join } from 'path';
 import { runGuard } from '../src/scanner.js';
 import { runVerify } from '../src/verify.js';
 import { runExplain } from '../src/explain.js';
+import { RULE_CATALOG } from '../src/rule-catalog.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'));
@@ -15,13 +16,13 @@ program
   .description('Static analyzer that detects vibe coding patterns in Java/Spring Boot projects')
   .version(pkg.version)
   .argument('[path]', 'Path to Java/Spring Boot project to analyze')
-  .option('--verify <rule>', 'Verify a VIBE rule is reproducible in your environment (e.g. VIBE-001)')
+  .option('--verify <rule>', 'Verify a VIBE rule is reproducible in your environment (e.g. VIBE-001). Requires Docker (24+), Java 17+ and Maven on PATH; runs a bundled Spring Boot app against a Postgres container (~1 min)')
   .option('--explain <rule>', 'Print curated information about a rule id (e.g. kafka, blocking-kafka) — no project scan')
   .addOption(
     new Option('--format <format>', 'Output format').choices(['text', 'json', 'sarif']).default('text')
   )
   .option('--json', 'Output results as JSON (compatibility alias for --format json)')
-  .option('--rule <name>', 'Run only one rule: blocking | blocking-kafka | layers | kafka | transactions | observability')
+  .option('--rule <name>', `Run only one rule: ${Object.keys(RULE_CATALOG).join(' | ')}`)
   .option('--ignore <dirs>', 'Comma-separated directories to exclude (e.g. labs,demos,test)')
   .option('--verbose', 'List suppressed findings with their rule, location, suppressedBy, and justification')
   .option('--baseline', 'Write/regenerate vibeguard-baseline.json from the current scan and exit (no report, no exit code by criticals)')

@@ -34,7 +34,7 @@ rejects outright (minimum is 1.44).
 
 ## Fix Applied in vibe-001 Verifier
 
-In `verify/vibe-001/app/pom.xml`, Surefire is configured with:
+In `cli/verify/vibe-001/app/pom.xml`, Surefire is configured with:
 
 ```xml
 <plugin>
