@@ -8,15 +8,15 @@ import org.springframework.scheduling.annotation.Scheduled;
 // shape (spring-scheduling/.../ScheduledFixedRateExample.java:11-15,
 // eugenp/tutorials). Each anchor independently opens its own
 // extractMethodBodyRange() call and both converge on the SAME real method
-// body, so both correctly find the same Thread.sleep() — this must produce
-// TWO findings (same location, different annotationName in the message),
-// exactly like today, NOT collapse to one. deduplicate() only collapses on
-// location+message, and the message includes the annotation name, so both
-// survive.
+// body, so both find the same Thread.sleep().
+// 0a (2.0.0): that used to produce TWO findings for ONE call. blocking.js now
+// merges findings per (location, rule, call) and names every anchor, so this
+// must produce exactly ONE finding:
+//   "Thread.sleep() detected in method annotated @Async, @Scheduled"
 public class BlockingDoubleAnchorProbe {
     @Async
     @Scheduled(fixedRate = 1000)
     public void scheduleFixedRateTaskAsync() throws InterruptedException {
-        Thread.sleep(50); // BUG: single method, two anchors — must produce 2 findings, not 1
+        Thread.sleep(50); // BUG: single method, two anchors — one call, one finding
     }
 }

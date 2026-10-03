@@ -110,9 +110,9 @@ export function checkBlocking(fileContexts) {
         for (const { re, name } of patterns) {
           if (re.test(windowCode)) {
             findings.push({
-              severity: 'critical',
               rule: annotationName === '@KafkaListener' ? 'blocking-kafka' : 'blocking',
-              message: `${name} detected in ${annotationName} method`,
+              call: name,
+              annotationName,
               location: `${relativePath}:${i + 1}`,
             });
           }
@@ -121,15 +121,33 @@ export function checkBlocking(fileContexts) {
     }
   }
 
-  return deduplicate(findings);
+  return mergeByCall(findings);
 }
 
-function deduplicate(findings) {
-  const seen = new Set();
-  return findings.filter(f => {
-    const key = `${f.location}|${f.message}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+// One finding per (location, rule, call). A method with several anchors
+// (e.g. @Async + @Scheduled stacked, BlockingDoubleAnchorProbe.java) used to
+// get one finding per anchor for the SAME call — two findings for one
+// Thread.sleep(). They are merged and every anchor is named in the message.
+// The call stays in the key so two different blocking calls on one line are
+// still two findings. Single-anchor messages keep their exact pre-2.0 text,
+// so existing vibeguard-baseline.json buckets (keyed on the message) still match.
+function mergeByCall(rawFindings) {
+  const merged = new Map();
+  for (const f of rawFindings) {
+    const key = `${f.location}|${f.rule}|${f.call}`;
+    const entry = merged.get(key);
+    if (!entry) {
+      merged.set(key, { ...f, annotations: [f.annotationName] });
+    } else if (!entry.annotations.includes(f.annotationName)) {
+      entry.annotations.push(f.annotationName);
+    }
+  }
+  return [...merged.values()].map(({ rule, call, annotations, location }) => ({
+    severity: 'critical',
+    rule,
+    message: annotations.length === 1
+      ? `${call} detected in ${annotations[0]} method`
+      : `${call} detected in method annotated ${annotations.join(', ')}`,
+    location,
+  }));
 }
