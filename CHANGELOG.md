@@ -1,5 +1,92 @@
 # Changelog
 
+## 2.0.0
+
+First npm release since 1.0.3 (2026-06-12). npm 1.0.3 was published from an
+older commit than the repo's own `1.0.3`: it lacked `--verify`,
+`--format sarif`, `--explain`, `--baseline` and the `reactor-block` and
+`kafka-send-timeout` rules. 2.0.0 is the repo's current state, published as
+one version on both channels (npm `2.0.0`, Action `@v2` / `@v2.0.0`).
+
+### Breaking — may turn a green CI red (why this is a major)
+
+- **Two new CRITICAL rules run by default:** `reactor-block` (`.block()`,
+  `.blockFirst()`, `.blockLast()`, `.toFuture().get()` in a Spring bean that
+  imports Reactor) and `kafka-send-timeout` (`.send(...).get()` with no
+  timeout). Projects pinned to `^1.0.3` or Action `@v1` keep 1.x behavior;
+  stay there until you are ready, or suppress per finding.
+- **`blocking` changed how it detects `.get()`.** 1.0.3 flagged any `.get()`
+  inside an async method, including `Optional.get()`/`Map.get()` (#5).
+  2.0.0 flags `.get()` only on receivers the same file declares with a
+  `Future`, `CompletableFuture`, `ListenableFuture` (and similar) type, plus
+  `CompletableFuture.xxxAsync(...).get()` chains. Timed
+  `get(timeout, unit)` calls are not flagged. Net effect: fewer findings on
+  non-Future `.get()`; Future `.get()` calls declared in another file are no
+  longer detected (known gap: no cross-file type resolution).
+
+### Added (already in the repo since 1.0.3, first time on npm)
+
+- `--format sarif` (SARIF 2.1.0), `--explain <rule>`, `--baseline`, `--verbose`.
+- `--verify VIBE-001`: reproduces connection-pool starvation in a bundled
+  Spring Boot app against a Postgres container. Requires Docker 24+,
+  Java 17+ and Maven on PATH.
+- Rules `reactor-block` and `kafka-send-timeout` (see Breaking).
+
+### Changed
+
+- `testcontainers-doctor` is now a dependency (pinned to `1.0.0`: `--verify`
+  parses its output text) — no global install needed.
+- `--verify` runs only the doctor's `docker` and `java` checks (in parallel,
+  60 s timeout). A full doctor run includes network checks (Docker Hub DNS,
+  image pull) that could exceed the old 15 s timeout on slow networks and
+  abort with a misleading "could not be run"; a timeout is now reported as such.
+- `--verify` runs the bundled app from a temp copy, so it works from a
+  read-only install and leaves no build output in the package.
+- The npm package ships only `bin/`, `src/`, `verify/` and `README.md`
+  (1.0.3 also shipped tests and fixtures).
+- MCP server version aligned to 2.0.0 (jar attached to the GitHub release).
+
+### Fixed
+
+- The same `Mono.block()` was reported twice (`blocking` and `reactor-block`)
+  when inside an `@Async` method of a Spring bean. Only `reactor-block` is
+  reported now; other blocking calls on that line still are.
+- **Evidence lines no longer cite figures from other mechanisms.** 1.x printed,
+  under `blocking`, "Lab #04 — throughput -74%, p99 +18.2s, pool exhausted after
+  13.9s" (figures that exist in no Java-Production-Labs result file) and, under
+  `blocking-kafka`, "Lab #08 — 60% request failure rate" (Lab 08 has no
+  `@KafkaListener`; that benchmark measured a blocking producer `send().get()`).
+  Each rule now cites only evidence that measures its own mechanism; rules
+  without one say "documented mechanism, no benchmark of our own". Lab 05 and
+  Lab 08 are cited under `kafka-send-timeout`, the mechanism they measured
+  (both runs predate the fixes that added timeouts), with links pinned to the
+  result commit. Evidence now lives in `rule-catalog.js`.
+- One blocking call inside a method with several anchors (e.g. `@Async` +
+  `@Scheduled`) was reported once per anchor. It is now one finding per
+  (location, rule, call), naming every anchor:
+  `Thread.sleep() detected in method annotated @Async, @Scheduled`.
+  Single-anchor messages are unchanged, so existing baselines still match.
+- `--help` listed 6 of the 8 rule ids for `--rule`.
+- `--explain blocking` described the rule inaccurately (only `@Async`,
+  "blocking I/O"); it now states the real anchors, calls and the
+  `Future.get()` matching and its limits.
+- The npm README (`cli/README.md`) described 1.0.x: it now documents
+  `--verify` and its requirements, SARIF, `--explain`, `--baseline`, all 8
+  rule ids and the `Future.get()` behavior.
+- Three CLI test suites were failing unnoticed because `npm test` ran only
+  `contract.test.js`; it now runs every suite, and CI smoke-tests the packed
+  tarball installed in a clean project (including a real `--verify`).
+
+### Known issues
+
+- **MCP server — duplicate CRITICAL on one call:** a single `future.get()` in a
+  `@Transactional` method is reported twice on the same line, as VIBE-001
+  (`TransactionalAsyncRule`) and VIBE-005 (`ConnectionPoolStarvationRule`).
+  The CLI's equivalent overlap (`blocking` + `reactor-block`) is fixed in 2.0.0;
+  the MCP one is not yet.
+- `blocking` does not detect `Future.get()` on a Future declared in another file
+  (see Breaking).
+
 ## CLI stabilization
 
 Stabilized the CLI engine (Layer 2 / GitHub Action) before starting

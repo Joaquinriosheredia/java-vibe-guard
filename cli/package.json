@@ -1,14 +1,23 @@
 {
   "name": "java-vibe-guard",
-  "version": "1.0.3",
+  "version": "2.0.0",
   "description": "Static analyzer that detects vibe coding patterns in Java/Spring Boot projects",
   "type": "module",
   "bin": {
     "java-vibe-guard": "bin/cli.js"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "verify/registry.js",
+    "verify/vibe-001/index.js",
+    "verify/vibe-001/app/pom.xml",
+    "verify/vibe-001/app/src/",
+    "README.md"
+  ],
   "scripts": {
     "start": "node bin/cli.js",
-    "test": "node test/contract.test.js",
+    "test": "node test/run-all.js",
     "validate-public": "node src/validate-public/index.js"
   },
   "keywords": [
@@ -28,9 +37,19 @@
   "license": "MIT",
   "dependencies": {
     "chalk": "^5.3.0",
-    "commander": "^12.0.0"
+    "commander": "^12.0.0",
+    "testcontainers-doctor": "1.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Joaquinriosheredia/java-vibe-guard.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/Joaquinriosheredia/java-vibe-guard#readme",
+  "bugs": {
+    "url": "https://github.com/Joaquinriosheredia/java-vibe-guard/issues"
   }
 }

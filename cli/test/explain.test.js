@@ -79,19 +79,22 @@ console.log('\n📋 §2: Data source — rule-catalog.js content and corrected c
   assert(typeof RULE_CATALOG === 'object' && RULE_CATALOG !== null, 'RULE_CATALOG is exported as an object');
 
   const kafka = RULE_CATALOG.kafka;
+  // kafka.short / transactions.short were deliberately rewritten after the
+  // extraction from sarif.js to match what the detectors actually do
+  // (50a7d6d kafka scope, c47509c transactions); pinned to the current text.
   assert(
-    kafka?.short === 'Kafka configuration and listener anti-patterns.',
-    'kafka.short matches the exact text that used to live in sarif.js:50 verbatim'
+    kafka?.short === 'Kafka listener, consumer group, and Zookeeper configuration issues.',
+    'kafka.short matches the current catalog text (50a7d6d)'
   );
   assert(
     kafka?.full === 'Flags Kafka usage issues: Zookeeper-based configuration deprecated in Kafka 3.x, @KafkaListener without an explicit groupId, listeners without retry/DLQ handling, and consumer configuration missing group.id.',
-    'kafka.full matches the exact text that used to live in sarif.js:51 verbatim'
+    'kafka.full matches the exact text that used to live in sarif.js:51 verbatim (unchanged)'
   );
 
   const transactions = RULE_CATALOG.transactions;
   assert(
-    transactions?.short === 'Transactional-boundary and rollback anti-patterns.',
-    'transactions.short matches the exact text that used to live in sarif.js:62 verbatim'
+    transactions?.short === '@Transactional placed on a Controller method, or combined with @Async.',
+    'transactions.short matches the current catalog text (c47509c)'
   );
 
   // severities field — new in this extraction, per docs/explain.md §2.
@@ -175,7 +178,7 @@ console.log('\n📋 §4: Output format — rule id, Severity line, short, full, 
     [
       'kafka',
       'Severity: warning',
-      'Kafka configuration and listener anti-patterns.',
+      RULE_CATALOG.kafka.short,
       'Flags Kafka usage issues:',
     ],
     'kafka: rule id, Severity, short, full appear in this exact order'
@@ -193,8 +196,8 @@ console.log('\n📋 §4: Output format — rule id, Severity line, short, full, 
     [
       'transactions',
       expectedMixedSeverityLine,
-      'Transactional-boundary and rollback anti-patterns.',
-      'Detects @Transactional methods',
+      RULE_CATALOG.transactions.short,
+      'Detects two @Transactional misuses',
     ],
     'transactions: rule id, Severity (mixed), short, full appear in this exact order'
   );

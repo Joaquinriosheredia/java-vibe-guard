@@ -15,6 +15,9 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
+import { ledgerTotals } from './fixture-ledger.js';
+
+const EXPECTED = ledgerTotals(); // test-fixtures/ totals, see fixture-ledger.js
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI = join(__dirname, '../bin/cli.js');
@@ -105,7 +108,7 @@ console.log('\n📋 Test 1: --format sarif over test-fixtures/ produces a well-f
   assert(driver.rules.every(r => r.helpUri === driver.rules[0].helpUri), 'every rule shares the same helpUri');
 
   const results = doc.runs[0].results;
-  assert(results.length === 17, `17 results, matching the 17 active findings in test-fixtures/: got ${results.length}`);
+  assert(results.length === EXPECTED.total, `${EXPECTED.total} results, matching the active findings in test-fixtures/ (fixture-ledger.js): got ${results.length}`);
   assert(results.every(r => ['error', 'warning', 'note'].includes(r.level)), 'every result has a valid SARIF level');
   assert(results.every(r => typeof r.message.text === 'string' && r.message.text.length > 0), 'every result has a non-empty message');
   assert(
@@ -131,10 +134,10 @@ console.log('\n📋 Test 2: zero regression for default text output and --json')
   const jsonRun = run(['--json', FIXTURES]);
   const json = JSON.parse(jsonRun.stdout);
   assert(jsonRun.exitCode === 1, '--json exit code is 1, unchanged');
-  assert(json.summary.critical === 11, '--json summary.critical is 11 (KafkaBlockingProbe.java blocking-kafka + 2 KafkaSendTimeoutTruePositive.java + 4 ReactorBlockTruePositive.java findings)');
-  assert(json.summary.major === 1, '--json summary.major unchanged at 1');
-  assert(json.summary.warning === 5, '--json summary.warning unchanged at 5');
-  assert(json.summary.reported === 17 && json.summary.total === 17, '--json reported === total === 17 (was 13 before the reactor-block fixtures were added)');
+  assert(json.summary.critical === EXPECTED.critical, `--json summary.critical is ${EXPECTED.critical} (fixture-ledger.js): got ${json.summary.critical}`);
+  assert(json.summary.major === EXPECTED.major, `--json summary.major is ${EXPECTED.major} (fixture-ledger.js): got ${json.summary.major}`);
+  assert(json.summary.warning === EXPECTED.warning, `--json summary.warning is ${EXPECTED.warning} (fixture-ledger.js): got ${json.summary.warning}`);
+  assert(json.summary.reported === EXPECTED.total && json.summary.total === EXPECTED.total, `--json reported === total === ${EXPECTED.total} (fixture-ledger.js)`);
   assert(json.summary.suppressed === 0, '--json suppressed is 0, unchanged');
 
   const formatJsonRun = run(['--format', 'json', FIXTURES]);
@@ -200,8 +203,8 @@ console.log('\n📋 Test 5: --json and --format sarif carry the same logical fin
   const jsonKeys = findingKeysFromJSON(json);
   const sarifKeys = findingKeysFromSarif(sarif);
 
-  assert(jsonKeys.size === 17, `--json reports 17 distinct (ruleId, location, message) tuples: got ${jsonKeys.size}`);
-  assert(sarifKeys.size === 17, `--format sarif reports 17 distinct (ruleId, location, message) tuples: got ${sarifKeys.size}`);
+  assert(jsonKeys.size === EXPECTED.total, `--json reports ${EXPECTED.total} distinct (ruleId, location, message) tuples: got ${jsonKeys.size}`);
+  assert(sarifKeys.size === EXPECTED.total, `--format sarif reports ${EXPECTED.total} distinct (ruleId, location, message) tuples: got ${sarifKeys.size}`);
 
   const onlyInJson = [...jsonKeys].filter(k => !sarifKeys.has(k));
   const onlyInSarif = [...sarifKeys].filter(k => !jsonKeys.has(k));

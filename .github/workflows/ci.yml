@@ -50,3 +50,44 @@ jobs:
           echo "major=${{ steps.guard.outputs.major }}"
           echo "warning=${{ steps.guard.outputs.warning }}"
           echo "healthy=${{ steps.guard.outputs.healthy }}"
+
+  # ── 3. Packaged smoke test — what `npx java-vibe-guard` actually installs ────
+  # Packs the tarball, installs it into an empty project and runs the INSTALLED
+  # binary: --version, --help, scan, SARIF, --explain, and the real
+  # --verify VIBE-001 (Docker is available on ubuntu-latest). Guards against
+  # the 1.0.3 failure mode, where the published package lacked --verify,
+  # --format sarif and two rules that the repo had. The tested tarball is
+  # uploaded so the release can publish exactly that file.
+  package-smoke:
+    name: Packaged tarball smoke test
+    runs-on: ubuntu-latest
+    needs: contract-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Java 21 (Temurin) for --verify
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Install CLI dependencies
+        run: npm ci
+        working-directory: cli
+
+      - name: Pack, install in a clean project and smoke-test
+        run: scripts/smoke-pack.sh dist
+        working-directory: cli
+        env:
+          SMOKE_VERIFY: '1'
+
+      - name: Upload the tested tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-vibe-guard-npm-tarball
+          path: cli/dist/*.tgz

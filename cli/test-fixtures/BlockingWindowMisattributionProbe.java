@@ -1,6 +1,7 @@
 package com.example;
 
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.annotation.RetryableTopic;
 
 // A3.2 (issue #11) — FIXED, was a known limitation. Before A3.2, blocking.js's
 // BLOCKING_PATTERNS scan used a fixed 60-line window past an annotation and
@@ -18,8 +19,13 @@ import org.springframework.kafka.annotation.KafkaListener;
 // fix, is what's under test here. Kept as a permanent regression guard: if
 // this assertion ever starts failing again (1 finding instead of 0), the
 // structural boundary broke and A3.2 regressed.
+// 0a (2.0.0): @RetryableTopic added so kafka.js's missing-retry/DLQ check
+// does not fire here either — this probe is scoped to blocking-kafka only and
+// must produce 0 findings from ANY rule (same pattern as
+// BlockingStackedAnnotationBracesProbe.java).
 public class BlockingWindowMisattributionProbe {
     @KafkaListener(topics = "orders", groupId = "order-group")
+    @RetryableTopic
     public void consume(String message) {
         System.out.println("processing " + message);
     }

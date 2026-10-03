@@ -1,0 +1,100 @@
+// Expected findings per fixture in cli/test-fixtures/, scanned as a whole
+// directory with no vibeguard.config.json — the single source of truth for
+// contract.test.js (Test 19), sarif-cli.test.js and baseline-cli.test.js.
+//
+// Why this exists: those three suites used to hardcode their own totals. They
+// drifted (17 vs 28) when the A3.x probes were added and only contract.test.js
+// was updated — and CI only ran contract.test.js, so nobody saw it.
+//
+// Rules for changing this file (0a): an entry may only change together with
+// the fixture or rule change that justifies it, and the note says why. A
+// *FalsePositive / *Probe fixture asserted to produce 0 findings for the rule
+// it targets must keep 0 for that rule — if it starts firing, fix the rule or
+// record it as a known false positive in the fixture header; never raise the
+// number here to make a test pass. Findings from OTHER rules on a fixture are
+// listed when they are true positives of that other rule (noted below).
+//
+// Shape: { '<path relative to test-fixtures/>': { '<ruleId>': { <severity>: count } } }
+// A fixture missing from this map is expected to produce zero findings.
+export const FIXTURE_LEDGER = {
+  'BlockingAsyncEventListenerTruePositive.java': { blocking: { critical: 2 } }, // @Async + @EventListener anchors
+  'BlockingDoubleAnchorProbe.java':               { blocking: { critical: 1 } }, // 0a: two anchors, one call → one finding naming both
+  'BlockingFutureGetTruePositive.java':           { blocking: { critical: 4 } }, // 0a: typed Future.get() (local, field, var, chained)
+  'BlockingModifiersGenericsThrowsProbe.java':    { blocking: { critical: 1 } },
+  'BlockingMultiLineAnnotationProbe.java':        { blocking: { critical: 1 } },
+  'BlockingNestedAnonClassProbe.java':            { blocking: { critical: 1 } },
+  'BlockingStackedAnnotationBracesProbe.java':    { 'blocking-kafka': { critical: 1 } },
+  'BlockingTruePositive.java':                    { blocking: { critical: 1 } },
+  'KafkaBlockingProbe.java':                      { 'blocking-kafka': { critical: 1 } },
+  'KafkaSendTimeoutTruePositive.java':            { 'kafka-send-timeout': { critical: 2 } },
+  'KafkaTruePositive.java':                       { kafka: { warning: 2 } },
+  // 0 layers findings; the observability warning is a true positive of
+  // observability.js: getUsers() has no logging.
+  'LayersFalsePositive.java':                     { observability: { warning: 1 } },
+  'LayersTruePositive.java':                      { layers: { major: 1 }, observability: { warning: 1 } },
+  'ObservabilityTruePositive.java':               { observability: { warning: 1 } },
+  // 0a dedup: Mono.block() reported once (reactor-block, not also blocking);
+  // the blocking finding is the separate Thread.sleep() on the next line.
+  'ReactorBlockAsyncDuplicateProbe.java':         { blocking: { critical: 1 }, 'reactor-block': { critical: 1 } },
+  'ReactorBlockTruePositive.java':                { 'reactor-block': { critical: 4 } },
+  'TransactionsTruePositive.java':                { transactions: { critical: 1 } },
+  'nested/module-a/OrderService.java':            { transactions: { critical: 1 } },
+  'nested/module-b/OrderService.java':            { transactions: { critical: 1 } },
+  // Expected to produce zero findings (listed for completeness, not required):
+  // BlockingAnomalouslyLongMethodProbe, BlockingFalsePositive,
+  // BlockingWindowCommentProbe, BlockingWindowMisattributionProbe (0a: their
+  // listeners now carry @RetryableTopic, so kafka.js's DLQ check no longer
+  // adds 3 incidental warnings — they produce 0 findings from any rule),
+  // BlockingFutureGetFalsePositive, CommentMentionGateProbe, KafkaFalsePositive,
+  // KafkaSendTimeoutFalsePositive, ObservabilityFalsePositive,
+  // ReactorBlockFalsePositive, TransactionsBlockCommentGateProbe,
+  // TransactionsFalsePositive.
+};
+
+export function ledgerTotals(ledger = FIXTURE_LEDGER) {
+  const totals = { critical: 0, major: 0, warning: 0, info: 0, total: 0 };
+  for (const byRule of Object.values(ledger)) {
+    for (const bySeverity of Object.values(byRule)) {
+      for (const [severity, count] of Object.entries(bySeverity)) {
+        totals[severity] += count;
+        totals.total += count;
+      }
+    }
+  }
+  return totals;
+}
+
+// Same shape as FIXTURE_LEDGER, built from a --json report of test-fixtures/.
+// issue.location is "<relative path>:<line>", relative to the scanned dir.
+export function breakdownFromJson(json) {
+  const out = {};
+  for (const { location, ruleId, severity } of json.issues) {
+    const file = location.replace(/:\d+$/, '');
+    out[file] ??= {};
+    out[file][ruleId] ??= {};
+    out[file][ruleId][severity] = (out[file][ruleId][severity] ?? 0) + 1;
+  }
+  return out;
+}
+
+// Human-readable differences between the ledger and an actual breakdown
+// (empty array = exact match, per fixture, per rule, per severity).
+export function diffAgainstLedger(actual, ledger = FIXTURE_LEDGER) {
+  const lines = [];
+  const files = new Set([...Object.keys(ledger), ...Object.keys(actual)]);
+  for (const file of [...files].sort()) {
+    const rules = new Set([...Object.keys(ledger[file] ?? {}), ...Object.keys(actual[file] ?? {})]);
+    for (const rule of rules) {
+      const severities = new Set([
+        ...Object.keys(ledger[file]?.[rule] ?? {}),
+        ...Object.keys(actual[file]?.[rule] ?? {}),
+      ]);
+      for (const severity of severities) {
+        const want = ledger[file]?.[rule]?.[severity] ?? 0;
+        const got = actual[file]?.[rule]?.[severity] ?? 0;
+        if (want !== got) lines.push(`${file} ${rule}/${severity}: expected ${want}, got ${got}`);
+      }
+    }
+  }
+  return lines;
+}

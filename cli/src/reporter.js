@@ -1,33 +1,21 @@
 import chalk from 'chalk';
+import { RULE_CATALOG } from './rule-catalog.js';
 
 const SEVERITY_ICON  = { critical: '❌', major: '❌', warning: '⚠️ ', info: 'ℹ️ ' };
 const SEVERITY_ORDER = { critical: 0, major: 1, warning: 2, info: 3 };
 
-const EVIDENCE_MAP = {
-  'blocking': {
-    lab: 'Java Production Lab #04 — Transactional Outbox',
-    conditions: '500 VUs, HikariCP pool=20',
-    metrics: ['throughput -74%', 'p99 +18.2s', 'pool exhausted after 13.9s'],
-    link: 'https://github.com/Joaquinriosheredia/Java-Production-Labs/tree/main/04_outbox_kafka',
-  },
-  'blocking-kafka': {
-    lab: 'Java Production Lab #08 — Kafka Streams',
-    conditions: 'broker fault injection',
-    metrics: ['60% request failure rate', 'health check false positive (actuator reported UP)', 'recovery < 200ms after broker restored'],
-    link: 'https://github.com/Joaquinriosheredia/Java-Production-Labs/tree/main/08_kafka_streams',
-  },
-};
-
+// Evidence lines under CRITICAL findings come from rule-catalog.js
+// (`evidence`), the same source as --explain and SARIF descriptions.
 function formatEvidence(rule) {
-  const e = EVIDENCE_MAP[rule];
+  const e = RULE_CATALOG[rule]?.evidence;
   if (!e) return null;
-  const lines = [
-    chalk.gray(`  Evidence: ${e.lab}`),
-    chalk.gray(`  Observed under controlled conditions (${e.conditions}):`),
-    ...e.metrics.map(m => chalk.gray(`  → ${m}`)),
-    chalk.gray(`  Reproduce: ${e.link}`),
-  ];
-  return lines.join('\n');
+  if (e.kind === 'mechanism') {
+    return chalk.gray(`  Evidence: documented mechanism, no benchmark of our own — ${e.text}`);
+  }
+  return e.results.flatMap(r => [
+    chalk.gray(`  Evidence (measured, ${r.lab}): ${r.text}`),
+    chalk.gray(`  Source: ${r.source}`),
+  ]).join('\n');
 }
 
 function label(severity) {

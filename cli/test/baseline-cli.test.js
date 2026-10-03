@@ -15,6 +15,9 @@ import {
   mkdtempSync, rmSync, writeFileSync, readFileSync, chmodSync, cpSync,
 } from 'fs';
 import { tmpdir } from 'os';
+import { ledgerTotals } from './fixture-ledger.js';
+
+const EXPECTED = ledgerTotals(); // test-fixtures/ totals, see fixture-ledger.js
 import { collectFiles } from '../src/scanner.js';
 import { applySuppressions } from '../src/suppression.js';
 import { loadConfig } from '../src/config.js';
@@ -105,7 +108,7 @@ console.log('\n📋 Test 1: --baseline writes vibeguard-baseline.json from a rea
     assert(Array.isArray(written.buckets), 'written file has a buckets array');
 
     const totalCount = written.buckets.reduce((sum, b) => sum + b.count, 0);
-    assert(totalCount === 17, `bucket counts sum to the 17 active findings in test-fixtures/: got ${totalCount}`);
+    assert(totalCount === EXPECTED.total, `bucket counts sum to the ${EXPECTED.total} active findings in test-fixtures/ (fixture-ledger.js): got ${totalCount}`);
 
     const activeCount = totalCount;
     assert(
@@ -206,10 +209,10 @@ console.log('\n📋 Test 5: zero regression when no baseline file and no --basel
     const { stdout, exitCode } = run(['--json', dir]);
     const json = JSON.parse(stdout);
 
-    assert(json.summary.critical === 11, 'summary.critical is 11 (KafkaBlockingProbe.java blocking-kafka + 2 KafkaSendTimeoutTruePositive.java + 4 ReactorBlockTruePositive.java findings)');
-    assert(json.summary.major === 1, 'summary.major unchanged at 1');
-    assert(json.summary.warning === 5, 'summary.warning unchanged at 5');
-    assert(json.summary.reported === 17 && json.summary.total === 17, 'reported === total === 17 (was 13 before the reactor-block fixtures were added)');
+    assert(json.summary.critical === EXPECTED.critical, `summary.critical is ${EXPECTED.critical} (fixture-ledger.js): got ${json.summary.critical}`);
+    assert(json.summary.major === EXPECTED.major, `summary.major is ${EXPECTED.major} (fixture-ledger.js): got ${json.summary.major}`);
+    assert(json.summary.warning === EXPECTED.warning, `summary.warning is ${EXPECTED.warning} (fixture-ledger.js): got ${json.summary.warning}`);
+    assert(json.summary.reported === EXPECTED.total && json.summary.total === EXPECTED.total, `reported === total === ${EXPECTED.total} (fixture-ledger.js)`);
     assert(json.summary.suppressed === 0, 'suppressed is 0, unchanged');
     assert(exitCode === 1, 'exit code is 1, unchanged — real criticals still fail the build');
     assert(

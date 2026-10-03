@@ -21,31 +21,26 @@ npx java-vibe-guard ./your-spring-project
 
 Reproduces a VIBE rule's anti-pattern in a live environment and confirms the phenomenon is observable.
 
-**Additional prerequisite:** `testcontainers-doctor` must be installed globally (used for environment pre-check):
-```bash
-npm install -g testcontainers-doctor
-```
-
-**Usage:**
+**Usage** (java-vibe-guard 2.0.0 or later):
 ```bash
 npx java-vibe-guard --verify VIBE-001
 ```
 
-Requires Docker 24+, Java 17+, and 512 MB of free memory.
+Requires Docker 24+, Java 17+, Maven on `PATH`, and 512 MB of free memory. The environment pre-check (`testcontainers-doctor`) ships as a dependency — nothing to install globally.
 
 ### GitHub Actions (CI)
 ```yaml
-- uses: Joaquinriosheredia/java-vibe-guard@v1.1.0
+- uses: Joaquinriosheredia/java-vibe-guard@v2
   with:
     path: '.'
     fail-on: 'critical'
 ```
 
-Fails the build on CRITICAL findings. Zero configuration required.
+Fails the build on CRITICAL findings. Zero configuration required. `@v2` adds two default CRITICAL rules over `@v1` — see [CHANGELOG](CHANGELOG.md#200).
 
 ### MCP Server (Claude Code)
-1. Download java-vibe-guard-mcp-0.1.0.jar from releases
-2. `claude mcp add java-vibe-guard -s user -- java -jar /path/to/java-vibe-guard-mcp-0.1.0.jar`
+1. Download `java-vibe-guard-mcp-2.0.0.jar` from the [v2.0.0 release](https://github.com/Joaquinriosheredia/java-vibe-guard/releases/tag/v2.0.0) (verify with `sha256sum -c java-vibe-guard-mcp-2.0.0.jar.sha256`)
+2. `claude mcp add java-vibe-guard -s user -- java -jar /path/to/java-vibe-guard-mcp-2.0.0.jar`
 
 Requires Java 21+
 
@@ -183,7 +178,7 @@ Add to any Java project's workflow — no installation required:
 
 ```yaml
 - name: java-vibe-guard
-  uses: Joaquinriosheredia/java-vibe-guard@v1.1.0
+  uses: Joaquinriosheredia/java-vibe-guard@v2
   with:
     path: '.'            # directory to scan (default: .)
     fail-on: 'critical'  # fail step on CRITICAL findings (default)
@@ -192,7 +187,7 @@ Add to any Java project's workflow — no installation required:
 Full options:
 
 ```yaml
-- uses: Joaquinriosheredia/java-vibe-guard@v1.1.0
+- uses: Joaquinriosheredia/java-vibe-guard@v2
   with:
     path: '.'
     rule: ''             # blank = all rules; or: blocking | blocking-kafka | kafka | kafka-send-timeout | layers | transactions | observability | reactor-block
@@ -210,7 +205,7 @@ Full options:
   #   ${{ steps.guard.outputs.report-sarif }}  # only set when sarif: 'true'
 ```
 
-The action writes a markdown table to the GitHub Actions summary panel and uploads the full JSON report as a workflow artifact (30-day retention). When `sarif: 'true'`, it also generates a SARIF 2.1.0 report and uploads it directly to GitHub Code Scanning via `github/codeql-action/upload-sarif` (requires `@v1.1.0` or later — not available on `@v1`).
+The action writes a markdown table to the GitHub Actions summary panel and uploads the full JSON report as a workflow artifact (30-day retention). When `sarif: 'true'`, it also generates a SARIF 2.1.0 report and uploads it directly to GitHub Code Scanning via `github/codeql-action/upload-sarif` (available since `@v1.1.0`; not on `@v1`).
 
 ---
 
@@ -230,7 +225,7 @@ cd mcp-server
 mvn package -DskipTests
 
 # Register in Claude Code (user scope — available in all projects)
-claude mcp add java-vibe-guard -s user -- java -jar mcp-server/target/java-vibe-guard-mcp-1.0.0-SNAPSHOT.jar
+claude mcp add java-vibe-guard -s user -- java -jar mcp-server/target/java-vibe-guard-mcp-2.0.0.jar
 ```
 
 ---
