@@ -47,6 +47,16 @@ one version on both channels (npm `2.0.0`, Action `@v2` / `@v2.0.0`).
 - The same `Mono.block()` was reported twice (`blocking` and `reactor-block`)
   when inside an `@Async` method of a Spring bean. Only `reactor-block` is
   reported now; other blocking calls on that line still are.
+- **Evidence lines no longer cite figures from other mechanisms.** 1.x printed,
+  under `blocking`, "Lab #04 — throughput -74%, p99 +18.2s, pool exhausted after
+  13.9s" (figures that exist in no Java-Production-Labs result file) and, under
+  `blocking-kafka`, "Lab #08 — 60% request failure rate" (Lab 08 has no
+  `@KafkaListener`; that benchmark measured a blocking producer `send().get()`).
+  Each rule now cites only evidence that measures its own mechanism; rules
+  without one say "documented mechanism, no benchmark of our own". Lab 05 and
+  Lab 08 are cited under `kafka-send-timeout`, the mechanism they measured
+  (both runs predate the fixes that added timeouts), with links pinned to the
+  result commit. Evidence now lives in `rule-catalog.js`.
 - One blocking call inside a method with several anchors (e.g. `@Async` +
   `@Scheduled`) was reported once per anchor. It is now one finding per
   (location, rule, call), naming every anchor:
@@ -62,6 +72,16 @@ one version on both channels (npm `2.0.0`, Action `@v2` / `@v2.0.0`).
 - Three CLI test suites were failing unnoticed because `npm test` ran only
   `contract.test.js`; it now runs every suite, and CI smoke-tests the packed
   tarball installed in a clean project (including a real `--verify`).
+
+### Known issues
+
+- **MCP server — duplicate CRITICAL on one call:** a single `future.get()` in a
+  `@Transactional` method is reported twice on the same line, as VIBE-001
+  (`TransactionalAsyncRule`) and VIBE-005 (`ConnectionPoolStarvationRule`).
+  The CLI's equivalent overlap (`blocking` + `reactor-block`) is fixed in 2.0.0;
+  the MCP one is not yet.
+- `blocking` does not detect `Future.get()` on a Future declared in another file
+  (see Breaking).
 
 ## CLI stabilization
 

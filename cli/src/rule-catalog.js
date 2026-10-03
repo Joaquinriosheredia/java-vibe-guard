@@ -1,5 +1,14 @@
-// Shared rule catalog — one object, two consumers (sarif.js's `rules` array
-// and --explain). Content is curated by hand from reading each rule's
+// Shared rule catalog — one object, three consumers (sarif.js's `rules`
+// array, --explain, and the Evidence lines reporter.js prints under CRITICAL
+// findings).
+//
+// evidence (0a, 2.0.0) — a rule may only cite evidence that measures ITS OWN
+// mechanism: kind 'measured' lists versioned lab result files (pinned to the
+// commit of the result, with the line range) and what they measured; kind
+// 'mechanism' means the failure mode is documented but no benchmark of ours
+// reproduces it. Never cite a figure from a lab that measured something else
+// (1.x printed Lab #04 pool figures under `blocking` that exist in no result
+// file, and Lab #08 under `blocking-kafka`, whose README retracts it). Content is curated by hand from reading each rule's
 // implementation in cli/src/rules/*.js, not extracted from any existing
 // document (there is no README section that covers the CLI's rule ids —
 // README.md's "Why These Rules Exist" documents the MCP server's unrelated
@@ -34,40 +43,65 @@ export const RULE_CATALOG = {
     short: 'Blocking calls detected inside asynchronous execution contexts.',
     full: 'Detects Thread.sleep(), .join(), .block()/.blockFirst()/.blockLast() and Future.get() inside methods annotated @Async, @Scheduled or @EventListener (@KafkaListener is reported as blocking-kafka). Blocking there pins a thread of the executor/scheduler pool and can exhaust it under load. Future.get() is only matched on a receiver this same file declares with a Future type (Future, CompletableFuture, ListenableFuture, ...) or on CompletableFuture.xxxAsync(...).get(); a bare .get() is not, to avoid Optional.get()/Map.get() false positives, so Futures declared in another file are not detected. Timed get(timeout, unit) is not flagged. A call under several anchors is reported once, naming all of them.',
     severities: ['critical'],
+    evidence: { kind: 'mechanism', text: 'the call holds a thread of the @Async executor / @Scheduled scheduler / event pool for its whole duration; under load the pool saturates' },
   },
   'blocking-kafka': {
     short: 'Blocking calls detected inside @KafkaListener methods.',
     full: 'Detects blocking calls inside @KafkaListener-annotated methods, which delays offset commits and can trigger a consumer group rebalance under broker latency or failure.',
     severities: ['critical'],
+    evidence: { kind: 'mechanism', text: 'a blocking call delays the consumer\'s next poll(); past max.poll.interval.ms the group coordinator considers the consumer dead and rebalances the group (Kafka consumer docs)' },
   },
   kafka: {
     short: 'Kafka listener, consumer group, and Zookeeper configuration issues.',
     full: 'Flags Kafka usage issues: Zookeeper-based configuration deprecated in Kafka 3.x, @KafkaListener without an explicit groupId, listeners without retry/DLQ handling, and consumer configuration missing group.id.',
     severities: ['warning'],
+    evidence: { kind: 'mechanism', text: 'without groupId each restart may join a new group and reprocess; without @RetryableTopic/DLQ a failing record is retried or dropped with no dead-letter path' },
   },
   'kafka-send-timeout': {
     short: 'Kafka send() result consumed with an unbounded blocking get().',
     full: 'Detects a `.send(...).get()` chain with no timeout argument, in a file that imports KafkaTemplate or org.springframework.kafka — `.get(timeout, TimeUnit)` calls with an explicit timeout argument are not matched. An unbounded .get() blocks the calling thread indefinitely if the broker is slow or unavailable, risking thread-pool exhaustion under sustained failure — the same shape as Java-Production-Labs SagaOrderService.java and StreamController.java before they were fixed to use .get(timeout, TimeUnit).',
     severities: ['critical'],
+    evidence: {
+      kind: 'measured',
+      results: [
+        {
+          lab: 'Java Production Lab #05 — Saga',
+          // Benchmark 727f42c (2026-05-15) ran before 01cee18 (2026-06-06) added a timeout:
+          // it measured the untimed send().get() this rule detects.
+          text: 'Kafka stopped mid-load: 35 of 50 requests failed (HTTP 000 timeouts while blocked on send().get(), or HTTP 500)',
+          source: 'https://github.com/Joaquinriosheredia/Java-Production-Labs/blob/727f42c/05_saga_pattern/benchmark/results/summary.md#L53-L67',
+        },
+        {
+          lab: 'Java Production Lab #08 — Kafka Streams',
+          // Benchmark 3e60592 (2026-05-21) ran before dcb0358 (2026-06-06) added a timeout.
+          text: 'Kafka stopped during load: 24 of 40 requests failed or timed out (60%); probe request hung until the 15 s client timeout',
+          source: 'https://github.com/Joaquinriosheredia/Java-Production-Labs/blob/3e60592/08_kafka_streams/benchmark/results/summary.md#L64-L86',
+        },
+      ],
+    },
   },
   layers: {
     short: 'Architectural layering violations.',
     full: 'Detects a Controller calling a Repository directly, bypassing the Service layer, eroding the transactional and validation boundary the layered architecture is meant to enforce.',
     severities: ['major'],
+    evidence: { kind: 'mechanism', text: 'the Service layer\'s transactional, validation and caching boundary is bypassed' },
   },
   observability: {
     short: 'Missing structured logging on request-handling endpoints.',
     full: 'Detects endpoints that lack structured logging, reducing the ability to trace and diagnose request behavior in production.',
     severities: ['warning'],
+    evidence: { kind: 'mechanism', text: 'requests through the endpoint leave no structured log line to trace in production' },
   },
   'reactor-block': {
     short: 'Reactive blocking call (.block()/.blockFirst()/.blockLast()/.toFuture().get()) inside a Spring bean.',
     full: 'Detects .block(), .blockFirst(), .blockLast(), or .toFuture().get() inside a class annotated @RestController, @Service, or @Component, in a file that imports reactor.core.publisher — the CLI port of the MCP server\'s VIBE-002 (ReactorBlockingCallRule). Excludes @Test, @PostConstruct, and main() methods. Blocking a Reactor pipeline pins the calling thread (e.g. a Schedulers.parallel() worker or the Netty event loop) for the full I/O duration, causing throughput collapse under load — see README "Found in the Wild" Finding 2 (FileContentSearchService.java, eugenp/tutorials).',
     severities: ['critical'],
+    evidence: { kind: 'mechanism', text: 'blocking pins a Reactor thread (Netty event loop or Schedulers.parallel() worker) for the whole I/O wait; with few such threads, throughput collapses under load' },
   },
   transactions: {
     short: '@Transactional placed on a Controller method, or combined with @Async.',
     full: 'Detects two @Transactional misuses, per transactions.js: (1) @Transactional on a method inside a class annotated @RestController or @Controller — the transaction boundary belongs in the Service layer instead; and (2) @Transactional and @Async annotated near the same method — Spring\'s proxy-based transaction propagation does not carry over onto the @Async-dispatched thread, so the transaction silently does not apply there.',
     severities: ['critical', 'major'],
+    evidence: { kind: 'mechanism', text: 'Spring\'s proxy-based transaction does not propagate to the @Async thread; on a Controller the transaction boundary sits in the web layer' },
   },
 };

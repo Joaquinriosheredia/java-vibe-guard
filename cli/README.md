@@ -62,8 +62,11 @@ java-vibe-guard — vibe coding detector for Java/Spring Boot
 Scanning: .  (3 files)
 
 ❌ CRITICAL: Thread.sleep() detected in @KafkaListener method → src/main/java/demo/KafkaConsumerBug.java:9
+  Evidence: documented mechanism, no benchmark of our own — a blocking call delays the consumer's next poll(); past max.poll.interval.ms the group coordinator considers the consumer dead and rebalances the group (Kafka consumer docs)
 ❌ CRITICAL: blocking Future.get() detected in @Async method → src/main/java/demo/OrderService.java:22
+  Evidence: documented mechanism, no benchmark of our own — the call holds a thread of the @Async executor / @Scheduled scheduler / event pool for its whole duration; under load the pool saturates
 ❌ CRITICAL: Reactive blocking call '.block()' inside Spring bean — pins a thread under load; use reactive composition (.flatMap, .map, .then) instead → src/main/java/demo/ReactiveController.java:14
+  Evidence: documented mechanism, no benchmark of our own — blocking pins a Reactor thread (Netty event loop or Schedulers.parallel() worker) for the whole I/O wait; with few such threads, throughput collapses under load
 ⚠️  WARNING: @KafkaListener without explicit groupId → src/main/java/demo/KafkaConsumerBug.java:7
 ⚠️  WARNING: @KafkaListener without @RetryableTopic or DLQ — failed messages will be lost → src/main/java/demo/KafkaConsumerBug.java:7
 ⚠️  WARNING: Endpoint without structured logging → src/main/java/demo/ReactiveController.java:11
@@ -75,7 +78,12 @@ Scanning: .  (3 files)
 🚨 3 CRITICAL issue(s) found — fix before deploying to production.
 ```
 
-(The text output also prints an "Evidence:" block under some CRITICAL findings; omitted here.)
+### Evidence
+
+Each CRITICAL finding prints the evidence behind its rule. A rule only cites evidence that measures its own mechanism:
+
+- **Measured** — `kafka-send-timeout` cites two [Java-Production-Labs](https://github.com/Joaquinriosheredia/Java-Production-Labs) fault-injection runs (Lab 05, Lab 08) in which an untimed `send().get()` blocked request threads while Kafka was down; each line links to the versioned result file, pinned to the commit of the result.
+- **Documented mechanism, no benchmark of our own** — every other rule today. The output says so instead of borrowing a figure from a benchmark that measured something else.
 
 ---
 

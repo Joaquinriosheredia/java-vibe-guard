@@ -1076,6 +1076,26 @@ console.log('\n📋 Test 18b: Future.get() on Future-typed receivers; .block() r
     rmSync(dupDir, { recursive: true, force: true });
   }
 
+  // 0a: Evidence lines cite only evidence that measures the rule's own mechanism.
+  const evDir = mkdtempSync(join(tmpdir(), 'vibe-guard-fixture-'));
+  try {
+    for (const f of ['BlockingTruePositive.java', 'KafkaBlockingProbe.java', 'KafkaSendTimeoutTruePositive.java', 'ReactorBlockTruePositive.java']) {
+      copyFileSync(join(FIXTURES, f), join(evDir, f));
+    }
+    const text = run(['--no-color', evDir]).stdout;
+    assert(!/Lab #0?4|Lab #0?8 — Kafka Streams\s*$|pool exhausted|throughput -74%|p99 \+18\.2s/m.test(text.split('kafka-send-timeout')[0] ?? text),
+      'no retracted / other-mechanism figures (Lab #04 pool metrics, Lab #08 under blocking-kafka) are printed');
+    const evidenceAfter = (needle) => text.split('\n')[text.split('\n').findIndex(l => l.includes(needle)) + 1] ?? '';
+    assert(evidenceAfter('detected in @Scheduled method → BlockingTruePositive').includes('documented mechanism, no benchmark of our own'), 'blocking: documented mechanism, no benchmark of our own');
+    assert(evidenceAfter('detected in @KafkaListener').includes('max.poll.interval.ms'), 'blocking-kafka: max.poll.interval.ms → rebalance mechanism, no benchmark');
+    assert(evidenceAfter("Reactive blocking call").includes('documented mechanism'), 'reactor-block: documented mechanism, no benchmark of our own');
+    const sources = text.split('\n').filter(l => l.trim().startsWith('Source: '));
+    assert(sources.some(l => /Java-Production-Labs\/blob\/727f42c\/05_saga_pattern\/benchmark\/results\/summary\.md#L53-L67/.test(l)), 'kafka-send-timeout cites Lab 05 results pinned to the result commit');
+    assert(sources.some(l => /Java-Production-Labs\/blob\/3e60592\/08_kafka_streams\/benchmark\/results\/summary\.md#L64-L86/.test(l)), 'kafka-send-timeout cites Lab 08 results pinned to the result commit');
+  } finally {
+    rmSync(evDir, { recursive: true, force: true });
+  }
+
   // The two A3.x window probes are scoped to blocking-kafka: no rule may fire.
   for (const probe of ['BlockingWindowCommentProbe.java', 'BlockingWindowMisattributionProbe.java']) {
     const probeDir = mkdtempSync(join(tmpdir(), 'vibe-guard-fixture-'));
