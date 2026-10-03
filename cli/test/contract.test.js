@@ -642,12 +642,15 @@ console.log('\n📋 Test 5a10: A3.2 case (d) — nested anonymous class inside t
 
 console.log('\n📋 Test 5a11: A3.2 case (4.b) — double anchor on the same method preserved');
 {
+  // 0a (2.0.0): one call, one finding — was 2 (one per anchor) before.
   const json = runOnFixture('BlockingDoubleAnchorProbe.java', 'blocking');
-  assert(json.issues.length === 2, 'BlockingDoubleAnchorProbe.java produces exactly 2 findings (not collapsed to 1)');
-  if (json.issues.length === 2) {
-    assert(json.issues.every(i => i.location.endsWith(':20')), 'both findings anchor to the same real Thread.sleep() line (20)');
-    assert(json.issues.some(i => i.message.includes('@Async')), 'one finding is attributed to @Async');
-    assert(json.issues.some(i => i.message.includes('@Scheduled')), 'one finding is attributed to @Scheduled');
+  assert(json.issues.length === 1, `BlockingDoubleAnchorProbe.java produces exactly 1 finding for its one Thread.sleep(): got ${json.issues.length}`);
+  if (json.issues.length === 1) {
+    assert(json.issues[0].location.endsWith(':20'), 'the finding anchors to the real Thread.sleep() line (20)');
+    assert(
+      json.issues[0].message === 'Thread.sleep() detected in method annotated @Async, @Scheduled',
+      `message names both anchors in source order: got "${json.issues[0].message}"`
+    );
   }
 }
 
@@ -1073,6 +1076,18 @@ console.log('\n📋 Test 18b: Future.get() on Future-typed receivers; .block() r
     rmSync(dupDir, { recursive: true, force: true });
   }
 
+  // The two A3.x window probes are scoped to blocking-kafka: no rule may fire.
+  for (const probe of ['BlockingWindowCommentProbe.java', 'BlockingWindowMisattributionProbe.java']) {
+    const probeDir = mkdtempSync(join(tmpdir(), 'vibe-guard-fixture-'));
+    try {
+      copyFileSync(join(FIXTURES, probe), join(probeDir, probe));
+      const all = JSON.parse(run(['--json', probeDir]).stdout);
+      assert(all.issues.length === 0, `${probe}: 0 findings from ANY rule: got ${all.issues.map(i => i.ruleId).join(',') || 'none'}`);
+    } finally {
+      rmSync(probeDir, { recursive: true, force: true });
+    }
+  }
+
   // Unit level: only the reactive .block* message is shadowed, never other calls.
   const loc = 'Svc.java:10';
   const kept = dropFindingsShadowedByReactorBlock([
@@ -1094,8 +1109,10 @@ console.log('\n📋 Test 19: zero regression on test-fixtures/ with no config fi
   const json = JSON.parse(stdout);
 
   // Per-fixture, per-rule, per-severity accounting lives in fixture-ledger.js
-  // (history: 28 after A3.2 — see that file and issue #11; 34 after 0a: +4
-  // BlockingFutureGetTruePositive.java, +2 ReactorBlockAsyncDuplicateProbe.java).
+  // (history: 28 after A3.2 — see that file and issue #11; 30 after 0a: +4
+  // BlockingFutureGetTruePositive.java, +2 ReactorBlockAsyncDuplicateProbe.java,
+  // -3 kafka warnings on the window probes (@RetryableTopic), -1 merged
+  // double-anchor finding).
   const EXPECTED = ledgerTotals();
   const ledgerDiff = diffAgainstLedger(breakdownFromJson(json));
   assert(ledgerDiff.length === 0, `findings match fixture-ledger.js exactly${ledgerDiff.length ? ':\n    ' + ledgerDiff.join('\n    ') : ''}`);

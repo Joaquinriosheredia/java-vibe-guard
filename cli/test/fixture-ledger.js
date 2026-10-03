@@ -18,18 +18,13 @@
 // A fixture missing from this map is expected to produce zero findings.
 export const FIXTURE_LEDGER = {
   'BlockingAsyncEventListenerTruePositive.java': { blocking: { critical: 2 } }, // @Async + @EventListener anchors
-  'BlockingDoubleAnchorProbe.java':               { blocking: { critical: 2 } }, // two anchors, same call, by design
+  'BlockingDoubleAnchorProbe.java':               { blocking: { critical: 1 } }, // 0a: two anchors, one call → one finding naming both
   'BlockingFutureGetTruePositive.java':           { blocking: { critical: 4 } }, // 0a: typed Future.get() (local, field, var, chained)
   'BlockingModifiersGenericsThrowsProbe.java':    { blocking: { critical: 1 } },
   'BlockingMultiLineAnnotationProbe.java':        { blocking: { critical: 1 } },
   'BlockingNestedAnonClassProbe.java':            { blocking: { critical: 1 } },
   'BlockingStackedAnnotationBracesProbe.java':    { 'blocking-kafka': { critical: 1 } },
   'BlockingTruePositive.java':                    { blocking: { critical: 1 } },
-  // 0 blocking-kafka findings (asserted in contract.test.js); the kafka
-  // warnings are true positives of kafka.js: the listeners declare groupId
-  // but have no @RetryableTopic/DLQ.
-  'BlockingWindowCommentProbe.java':              { kafka: { warning: 2 } },
-  'BlockingWindowMisattributionProbe.java':       { kafka: { warning: 1 } },
   'KafkaBlockingProbe.java':                      { 'blocking-kafka': { critical: 1 } },
   'KafkaSendTimeoutTruePositive.java':            { 'kafka-send-timeout': { critical: 2 } },
   'KafkaTruePositive.java':                       { kafka: { warning: 2 } },
@@ -47,6 +42,9 @@ export const FIXTURE_LEDGER = {
   'nested/module-b/OrderService.java':            { transactions: { critical: 1 } },
   // Expected to produce zero findings (listed for completeness, not required):
   // BlockingAnomalouslyLongMethodProbe, BlockingFalsePositive,
+  // BlockingWindowCommentProbe, BlockingWindowMisattributionProbe (0a: their
+  // listeners now carry @RetryableTopic, so kafka.js's DLQ check no longer
+  // adds 3 incidental warnings — they produce 0 findings from any rule),
   // BlockingFutureGetFalsePositive, CommentMentionGateProbe, KafkaFalsePositive,
   // KafkaSendTimeoutFalsePositive, ObservabilityFalsePositive,
   // ReactorBlockFalsePositive, TransactionsBlockCommentGateProbe,
