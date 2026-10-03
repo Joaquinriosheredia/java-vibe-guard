@@ -47,7 +47,18 @@ one version on both channels (npm `2.0.0`, Action `@v2` / `@v2.0.0`).
 - The same `Mono.block()` was reported twice (`blocking` and `reactor-block`)
   when inside an `@Async` method of a Spring bean. Only `reactor-block` is
   reported now; other blocking calls on that line still are.
+- One blocking call inside a method with several anchors (e.g. `@Async` +
+  `@Scheduled`) was reported once per anchor. It is now one finding per
+  (location, rule, call), naming every anchor:
+  `Thread.sleep() detected in method annotated @Async, @Scheduled`.
+  Single-anchor messages are unchanged, so existing baselines still match.
 - `--help` listed 6 of the 8 rule ids for `--rule`.
+- `--explain blocking` described the rule inaccurately (only `@Async`,
+  "blocking I/O"); it now states the real anchors, calls and the
+  `Future.get()` matching and its limits.
+- The npm README (`cli/README.md`) described 1.0.x: it now documents
+  `--verify` and its requirements, SARIF, `--explain`, `--baseline`, all 8
+  rule ids and the `Future.get()` behavior.
 - Three CLI test suites were failing unnoticed because `npm test` ran only
   `contract.test.js`; it now runs every suite, and CI smoke-tests the packed
   tarball installed in a clean project (including a real `--verify`).

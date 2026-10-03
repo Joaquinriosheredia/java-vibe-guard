@@ -1,24 +1,12 @@
 # java-vibe-guard
 
-> Stop shipping AI-generated Java code that looks right but fails in production. Get caught in seconds.
+> Static analyzer for Java/Spring Boot code that compiles, passes its tests, and fails in production under load — patterns that are common in AI-generated code.
 
 [![npm version](https://img.shields.io/npm/v/java-vibe-guard?color=blue)](https://www.npmjs.com/package/java-vibe-guard)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js ≥18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
----
-
-## The problem
-
-You (or your AI assistant) wrote Spring Boot code that compiles, the tests pass, and it looks clean. Then it goes to production and:
-
-- A `@Scheduled` job blocks all threads with `.get()` on a CompletableFuture
-- A Controller calls a Repository directly, skipping the Service layer
-- A Kafka consumer has no retry strategy — one bad message kills the consumer
-- `@Transactional` + `@Async` silently loses the transaction
-- Every endpoint is a black box with zero structured logging
-
-**java-vibe-guard** scans your project in seconds and tells you exactly what is wrong and how to fix it.
+> **2.0.0 is a major release:** two CRITICAL rules run by default that 1.0.3 did not have (`reactor-block`, `kafka-send-timeout`), and `blocking` changed how it matches `.get()`. A CI that was green on 1.0.3 can turn red. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#200).
 
 ---
 
@@ -33,179 +21,189 @@ npm install -g java-vibe-guard
 java-vibe-guard ./my-spring-project
 ```
 
+Requires Node.js 18+. Scanning needs nothing else; `--verify` needs more (see below).
+
 ---
 
 ## What it detects
 
 | Rule | Severity | Pattern |
 |------|----------|---------|
-| **blocking** | 🔴 CRITICAL | `.get()` / `.join()` / `.block()` / `Thread.sleep()` inside `@Scheduled`, `@KafkaListener`, `@Async` |
-| **layers** | 🟡 MAJOR | `@Controller` accessing `*Repository` or `KafkaTemplate` directly |
-| **transactions** | 🟡 MAJOR | `@Transactional` on Controller · `@Transactional` + `@Async` combination |
+| **blocking** | 🔴 CRITICAL | `Thread.sleep()`, `.join()`, `.block()`/`.blockFirst()`/`.blockLast()` and `Future.get()` inside `@Async`, `@Scheduled` or `@EventListener` methods (see [Future.get()](#futureget) below) |
+| **blocking-kafka** | 🔴 CRITICAL | The same blocking calls inside a `@KafkaListener` method |
+| **reactor-block** | 🔴 CRITICAL | `.block()` / `.blockFirst()` / `.blockLast()` / `.toFuture().get()` in a `@RestController`/`@Service`/`@Component` that imports `reactor.core.publisher` |
+| **kafka-send-timeout** | 🔴 CRITICAL | `.send(...).get()` with no timeout in a file that uses `KafkaTemplate` |
+| **transactions** | 🔴 CRITICAL / 🟡 MAJOR | `@Transactional` + `@Async` on the same method (CRITICAL) · `@Transactional` on a Controller method (MAJOR) |
+| **layers** | 🟡 MAJOR | A Controller using a `*Repository` or `KafkaTemplate` directly |
 | **kafka** | ⚠️ WARNING | Zookeeper in docker-compose · `@KafkaListener` without `groupId` · no `@RetryableTopic` or DLQ |
-| **observability** | ⚠️ WARNING | Endpoint methods with no structured logging (`log.info`, `log.warn`, etc.) |
+| **observability** | ⚠️ WARNING | Endpoint methods with no structured logging (`log.info`, `log.warn`, …) |
+
+`java-vibe-guard --explain <rule>` prints the full description of any rule.
+
+### Future.get()
+
+`blocking` flags `.get()` **only on a receiver that the same file declares with a Future type** — a field, parameter or local of type `Future`, `CompletableFuture`, `ListenableFuture`, `ScheduledFuture`, `FutureTask` … (raw or generic), or `var x = CompletableFuture.…` — plus `CompletableFuture.xxxAsync(...).get()` chains.
+
+- A bare `.get()` is not matched: without type resolution it would also flag `Optional.get()` and `Map.get()` (issue #5).
+- **Known gap:** a Future declared in another file (e.g. returned by a method of another class and never stored in a typed variable here) is not detected.
+- `get(timeout, unit)` is not flagged — a bounded wait is the recommended fix.
+- 1.0.3 flagged every `.get()`; 2.0.0 flags fewer, more precise ones.
+
+When a reactive `.block()` matches both `blocking` and `reactor-block` on the same line, only `reactor-block` is reported. A call inside a method with several anchors (e.g. `@Async` + `@Scheduled`) is reported once: `Thread.sleep() detected in method annotated @Async, @Scheduled`.
 
 ---
 
 ## Example output
 
+Real output of 2.0.0 on [java-vibe-guard-demo](https://github.com/Joaquinriosheredia/java-vibe-guard-demo):
+
 ```
 java-vibe-guard — vibe coding detector for Java/Spring Boot
-Scanning: ./my-project  (47 files)
+Scanning: .  (3 files)
 
-❌ CRITICAL: blocking .get() detected in @Scheduled method → OutboxPublisher.java:55
-❌ CRITICAL: @Transactional + @Async — transaction will NOT propagate to async thread → PaymentService.java:88
-❌ MAJOR: Controller accessing Repository directly (UserRepository) → UserController.java:23
-❌ MAJOR: @Transactional on Controller method (move to Service layer) → PaymentController.java:12
-⚠️  WARNING: @KafkaListener without @RetryableTopic or DLQ → OrderConsumer.java:34
-⚠️  WARNING: Kafka using Zookeeper (deprecated — migrate to KRaft) → docker-compose.yml:8
-⚠️  WARNING: Endpoint without structured logging → OrderController.java:67
+❌ CRITICAL: Thread.sleep() detected in @KafkaListener method → src/main/java/demo/KafkaConsumerBug.java:9
+❌ CRITICAL: blocking Future.get() detected in @Async method → src/main/java/demo/OrderService.java:22
+❌ CRITICAL: Reactive blocking call '.block()' inside Spring bean — pins a thread under load; use reactive composition (.flatMap, .map, .then) instead → src/main/java/demo/ReactiveController.java:14
+⚠️  WARNING: @KafkaListener without explicit groupId → src/main/java/demo/KafkaConsumerBug.java:7
+⚠️  WARNING: @KafkaListener without @RetryableTopic or DLQ — failed messages will be lost → src/main/java/demo/KafkaConsumerBug.java:7
+⚠️  WARNING: Endpoint without structured logging → src/main/java/demo/ReactiveController.java:11
 
 ──────────────────────────────────────────────────────────────
-📊 Summary: 2 critical · 2 major · 3 warnings
+📊 Summary: 3 critical · 3 warnings
 ──────────────────────────────────────────────────────────────
 
-🚨 2 CRITICAL issue(s) found — fix before deploying to production.
+🚨 3 CRITICAL issue(s) found — fix before deploying to production.
 ```
+
+(The text output also prints an "Evidence:" block under some CRITICAL findings; omitted here.)
 
 ---
 
 ## CLI options
 
 ```
-Usage: java-vibe-guard <path> [options]
-
-Arguments:
-  path                   Path to Java/Spring Boot project to analyze
+Usage: java-vibe-guard [options] [path]
 
 Options:
-  -V, --version          show version
-  --json                 output results as JSON (for CI parsing)
-  --rule <name>          run only one rule: blocking | layers | kafka | transactions | observability
-  --ignore <dirs>        comma-separated directories to exclude from scanning
-  --no-color             disable colored output
-  -h, --help             display help
+  -V, --version      output the version number
+  --verify <rule>    Verify a VIBE rule is reproducible in your environment (e.g. VIBE-001).
+                     Requires Docker (24+), Java 17+ and Maven on PATH
+  --explain <rule>   Print curated information about a rule id — no project scan
+  --format <format>  Output format: text (default) | json | sarif
+  --json             Alias for --format json
+  --rule <name>      Run only one rule: blocking | blocking-kafka | kafka | kafka-send-timeout |
+                     layers | observability | reactor-block | transactions
+  --ignore <dirs>    Comma-separated directories to exclude (e.g. labs,demos,test)
+  --verbose          List suppressed findings with their rule, location and justification
+  --baseline         Write/regenerate vibeguard-baseline.json from the current scan and exit
+  --no-color         Disable colored output
+  -h, --help         display help for command
 ```
 
 ### Excluding directories
 
-Use `--ignore` to skip directories that intentionally deviate from production patterns:
-
 ```bash
-# Skip educational lab directories and test fixtures
 java-vibe-guard . --ignore labs,demos,test
-
-# Skip generated code and legacy modules
-java-vibe-guard . --ignore generated,legacy,sandbox
 ```
 
-> **Note on educational projects:** `controller→repository` findings in lab or tutorial code are often intentional simplifications — the goal is demonstrating a single concept without the full service layer. Use `--ignore` to suppress findings in those directories and keep CI signal clean for production code only.
+> **Educational projects:** `controller→repository` findings in lab or tutorial code are often intentional simplifications. Use `--ignore` to keep CI signal on production code.
+
+### Suppressions and baseline
+
+- Inline: `// vibe-guard: ignore <rule>` on (or above) the flagged line; `vibeguard.config.json` for project-wide excludes.
+- `--baseline` snapshots the current findings into `vibeguard-baseline.json`. When that file exists, later scans report only findings that are not in it — adopt the tool on an existing codebase and fail only on new problems.
+- Suppressed and baselined findings never fail the build. `--verbose` lists the suppressed ones.
+
+Full grammar: [docs/suppression-grammar.md](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/docs/suppression-grammar.md) · [docs/baseline.md](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/docs/baseline.md).
+
+---
+
+## `--verify` — reproduce the failure
+
+```bash
+npx java-vibe-guard --verify VIBE-001
+```
+
+Runs a bundled Spring Boot app (HikariCP pool of 5, `@Transactional` method holding its connection during an async wait) against a Postgres container, sends 20 concurrent requests, and checks that the pool saturates, requests queue for connections, and p95 latency rises above 800 ms. Takes about a minute (longer the first time, while Maven and the Postgres image download).
+
+**Requires Docker 24+, Java 17+, Maven on `PATH`** and 512 MB of free memory. The environment pre-check ([testcontainers-doctor](https://www.npmjs.com/package/testcontainers-doctor)) ships as a dependency — nothing to install globally.
+
+- Available today: `VIBE-001` only.
+- It reproduces a canonical scenario; it does **not** run your project's code.
+- Exit codes: `0` reproduced · `1` not reproduced · `2` environment or setup error / unknown rule.
 
 ---
 
 ## CI integration
 
-Exit code `1` if any CRITICAL finding, `0` otherwise (including when only MAJOR/WARNING issues are found).
+GitHub Action (recommended — JSON artifact, step summary, optional SARIF upload):
 
 ```yaml
-# GitHub Actions
-- name: Vibe guard check
-  run: npx java-vibe-guard . --json | tee vibe-report.json
-  # Fails the build on CRITICAL findings
+- uses: Joaquinriosheredia/java-vibe-guard@v2
+  with:
+    path: '.'
+    fail-on: 'critical'   # critical | never
+    sarif: 'true'         # upload to GitHub Code Scanning
 ```
 
-### JSON output contract
+Or call the CLI directly:
 
-`--json` emits a single JSON object to stdout. Schema is stable for CI parsing:
+```yaml
+- name: java-vibe-guard
+  run: npx java-vibe-guard@2 . --format sarif > vibe-guard.sarif
+```
+
+### Exit codes
+
+| Condition | Exit code |
+|-----------|-----------|
+| At least one visible `critical` finding | `1` |
+| Only `major` / `warning` findings, or none | `0` |
+| Scan error (path not found, no Java/config files, unknown `--rule`) | `1` |
+| `--explain` / `--verify` with an unknown rule | `2` |
+
+Note that `1` covers both "critical findings" and "scan error".
+
+### JSON output (`--format json`)
 
 ```jsonc
 {
-  "timestamp": "2026-05-30T18:00:00.000Z",
-  "projectPath": "./my-project",
-  "filesScanned": 47,
-  "summary": {
-    "critical": 2,   // → exit code 1
-    "major": 1,
-    "warning": 3,
-    "info": 0
-  },
-  "healthy": false,  // true when critical === 0
+  "timestamp": "2026-10-03T03:00:00.000Z",
+  "projectPath": ".",
+  "filesScanned": 3,
+  "summary": { "critical": 3, "major": 0, "warning": 3, "info": 0,
+               "reported": 6, "suppressed": 0, "total": 6 },
+  "healthy": false,                     // true when critical === 0
   "issues": [
     {
-      "severity": "critical",   // critical | major | warning | info
-      "ruleId":   "blocking",   // blocking | layers | kafka | transactions | observability
-      "message":  "blocking .get() detected in @Scheduled method",
-      "location": "OutboxPublisher.java:55"
+      "severity": "critical",           // critical | major | warning | info
+      "ruleId":   "blocking",           // any id from the rules table
+      "message":  "blocking Future.get() detected in @Async method",
+      "location": "src/main/java/demo/OrderService.java:22"   // path relative to the scan root : line
     }
   ]
 }
 ```
 
-**Exit code contract:**
+### SARIF (`--format sarif`)
 
-| Condition | Exit code |
-|-----------|-----------|
-| At least one `critical` issue | `1` |
-| Only `major` / `warning` / `info` issues | `0` |
-| No issues found | `0` |
-| Scan error (path not found, no Java files) | `1` |
+SARIF 2.1.0 on stdout, one `run`, ready for `github/codeql-action/upload-sarif`. Severity → `level`: critical and major → `error`, warning → `warning`, info → `note`; each rule also carries a `security-severity` (9.5 / 7.5 / 5.0 / 2.0). Suppressed and baselined findings are excluded. Spec: [docs/sarif.md](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/docs/sarif.md).
 
 ---
 
-## Run a single rule
+## Ecosystem
 
-```bash
-java-vibe-guard ./project --rule blocking
-java-vibe-guard ./project --rule kafka
-java-vibe-guard ./project --rule layers
-java-vibe-guard ./project --rule transactions
-java-vibe-guard ./project --rule observability
-```
+This package is one of two independent Java engines in the [java-vibe-guard](https://github.com/Joaquinriosheredia/java-vibe-guard) repository:
 
----
+| Tool | Rules | Engine | Use case |
+|------|-------|--------|----------|
+| CLI (this package) / GitHub Action | 8 rule ids (above) | Regex / line-based | CI/CD, quick scans |
+| MCP server | VIBE-001…007 | Line-based (Java), no AST | Claude Code integration |
 
-## Why these rules?
-
-### blocking — Thread starvation in production
-A `CompletableFuture.get()` inside a `@Scheduled` method blocks the scheduler thread. Under load, all scheduler threads exhaust and no scheduled task runs again. This is one of the most common silent failures in AI-generated Spring Boot code.
-
-### layers — Architectural corruption
-Controllers calling Repositories directly bypass all business logic, validation, caching, and event publishing in the Service layer. One sprint of vibe coding and your architecture is gone.
-
-### transactions — The silent rollback trap
-`@Transactional` on a Controller means the transaction spans the entire HTTP request including serialization — holding database connections longer than necessary. `@Transactional` + `@Async` is worse: Spring creates a new thread for `@Async`, which has no transaction context. The code runs, nothing fails, and your data is silently inconsistent.
-
-### kafka — At-least-once with zero guarantees
-A Kafka consumer without `groupId` creates a random group on every restart — it will reprocess all messages from the beginning. Without `@RetryableTopic`, one poison pill message retries forever and blocks partition progress.
-
-### observability — Black box endpoints
-Without structured logging at endpoints, debugging production incidents requires re-deployment. One `log.info` with the correlation ID costs nothing. The absence costs hours.
-
----
-
-## Requirements
-
-- Node.js 18+
-- A Java/Spring Boot project to scan
+The two engines use different rule ids and do not detect exactly the same things. Python: [python-vibe-guard](https://github.com/Joaquinriosheredia/python-vibe-guard).
 
 ---
 
 ## License
 
 MIT
-
----
-
-## Ecosystem
-
-The npm CLI provides lightweight repository scanning with 5 rules.
-For AST-based analysis with 7 rules and Claude Code integration, 
-use the MCP server.
-
-| Tool | Rules | Engine | Use case |
-|------|-------|--------|----------|
-| CLI (this package) | 5 | Regex | Quick scan, CI/CD |
-| MCP Server | 7 | AST | Claude Code integration |
-| GitHub Action | 5 | Regex | Automatic PR scanning |
-
-Full ecosystem: https://github.com/Joaquinriosheredia/java-vibe-guard

@@ -32,7 +32,7 @@
 export const RULE_CATALOG = {
   blocking: {
     short: 'Blocking calls detected inside asynchronous execution contexts.',
-    full: 'Detects blocking calls (Thread.sleep, .get(), blocking I/O) inside @Async-annotated methods, which negates the concurrency benefit of asynchronous execution and can exhaust the underlying executor thread pool under load.',
+    full: 'Detects Thread.sleep(), .join(), .block()/.blockFirst()/.blockLast() and Future.get() inside methods annotated @Async, @Scheduled or @EventListener (@KafkaListener is reported as blocking-kafka). Blocking there pins a thread of the executor/scheduler pool and can exhaust it under load. Future.get() is only matched on a receiver this same file declares with a Future type (Future, CompletableFuture, ListenableFuture, ...) or on CompletableFuture.xxxAsync(...).get(); a bare .get() is not, to avoid Optional.get()/Map.get() false positives, so Futures declared in another file are not detected. Timed get(timeout, unit) is not flagged. A call under several anchors is reported once, naming all of them.',
     severities: ['critical'],
   },
   'blocking-kafka': {
