@@ -56,7 +56,7 @@ java-vibe-guard/
 
 ## Active Rules — MCP Server (VIBE-001 to VIBE-007)
 
-**7 rules · 143 tests**
+**7 rules · 148 tests**
 
 | Code | Rule | Description |
 |------|------|-------------|
@@ -74,17 +74,28 @@ All rules share the same design principles: explicit annotation gate (no inferen
 
 ## Why These Rules Exist
 
-Each rule was designed around a failure mode observed in [Java-Production-Labs](https://github.com/Joaquinriosheredia/Java-Production-Labs) — a benchmark suite of 10 Spring Boot labs exercised under real load and fault injection. Rules without a direct lab observation are marked *theoretical* and will be promoted to *observed* once empirical evidence is collected.
+Each rule's evidence is graded with the same criterion as the CLI output: it counts only if it reproduces **the rule's own mechanism**. There are two grades:
+
+- **Reproduced:** `npx java-vibe-guard --verify VIBE-001` runs the anti-pattern in a live Spring Boot + PostgreSQL app and checks three observations: HikariCP pool utilization ≥ 95 %, requests waiting for a connection, and p95 latency ≥ 800 ms. It runs in CI on every change to the verifier ([`vibe-001-verify.yml`](.github/workflows/vibe-001-verify.yml)).
+- **Documented mechanism, no benchmark of our own:** the failure mode is documented by the framework or platform, but this project has not measured it. Lab figures that measure a *different* mechanism are not cited as evidence.
+
+| Rule | Evidence |
+|------|----------|
+| VIBE-001 `TransactionalAsyncRule` | Reproduced — `--verify VIBE-001` |
+| VIBE-002 `ReactorBlockingCallRule` | Documented mechanism, no benchmark of our own |
+| VIBE-003 `JpaNPlusOneRule` | Documented mechanism, no benchmark of our own |
+| VIBE-004 `VirtualThreadsMisuseRule` | Documented mechanism, no benchmark of our own |
+| VIBE-005 `ConnectionPoolStarvationRule` | Reproduced — `--verify VIBE-001` (same mechanism) |
+| VIBE-006 `KafkaRebalanceHazardRule` | Documented mechanism, no benchmark of our own |
+| VIBE-007 `MdcContextLeakRule` | Documented mechanism, no benchmark of our own |
 
 ---
 
 ### VIBE-001 — `TransactionalAsyncRule`
 
-**Detects:** `.get()` / `.block()` inside `@Transactional` — a Kafka or HTTP send that holds the DB write lock open until the external call resolves, risking connection pool exhaustion and silent event loss on broker failure.
+**Detects:** `.get()` / `.block()` inside `@Transactional` — the method holds its HikariCP connection until the external call resolves, so concurrent requests exhaust the pool.
 
-**Observed in:** [Lab 04 — Transactional Outbox Pattern](https://github.com/Joaquinriosheredia/Java-Production-Labs/tree/main/04_outbox_kafka)
-
-**Evidence:** The `@Transactional pollAndPublish()` poller held a DB write lock during each Kafka send batch. A chaos run revealed that when `send()` partially committed before a failure, events were silently marked `FAILED` and never retried — `findPendingEvents()` only queried `status = 'PENDING'`, making FAILED events permanently invisible to the poller. Five events were confirmed permanently undeliverable in the optimization run before the bug was fixed.
+**Evidence:** Reproduced by `--verify VIBE-001` (see above): a `@Transactional` method saves a row and then waits on a `CompletableFuture`, holding the connection for the whole wait ([`cli/verify/vibe-001/`](cli/verify/vibe-001/)).
 
 ---
 
@@ -92,9 +103,7 @@ Each rule was designed around a failure mode observed in [Java-Production-Labs](
 
 **Detects:** `.block()` / `.blockFirst()` / `.toFuture().get()` in a reactive `@RestController` or `@Service` — pins a thread from `Schedulers.parallel()` (fixed-size, CPU-core-count pool) for the full duration of the I/O operation, which can stall all reactive pipeline scheduling.
 
-**Observed in:** *Theoretical* — no direct Java-Production-Labs lab covers Project Reactor. A confirmed wild-code instance is documented in the [Found in the Wild](#found-in-the-wild) section below (eugenp/tutorials, `spring-reactive-4`).
-
-**Evidence:** Theoretical until a reactive lab is added. The wild-code case shows `.block()` on `Schedulers.parallel()` exhausting all available scheduler threads under concurrent load.
+**Evidence:** Documented mechanism, no benchmark of our own. Project Reactor documents that blocking calls on non-blocking schedulers stall them; no Java-Production-Labs lab covers Reactor, and there is no confirmed real-world case.
 
 ---
 
@@ -102,19 +111,15 @@ Each rule was designed around a failure mode observed in [Java-Production-Labs](
 
 **Detects:** Repository calls (`findById`, `save`, `delete`) inside a loop or stream lambda — each iteration issues a separate SQL round trip, producing N database queries for a collection of N elements.
 
-**Observed in:** [Lab 07 — PostgreSQL Tuning](https://github.com/Joaquinriosheredia/Java-Production-Labs/tree/main/07_postgres_tuning)
-
-**Evidence:** Benchmark observed ~23× query time degradation when queries ran without a partial index on a 100K-row table (~285ms sequential scan vs. ~12ms index scan against 5% selective rows). N+1 patterns that issue per-entity queries amplify this cost linearly with collection size — each unindexed lookup triggers a full sequential scan at the same ~285ms baseline.
+**Evidence:** Documented mechanism, no benchmark of our own. One query per element is the N+1 pattern described in the Hibernate/JPA documentation. This project has not benchmarked it.
 
 ---
 
 ### VIBE-004 — `VirtualThreadsMisuseRule`
 
-**Detects:** `synchronized` or `ThreadLocal` usage in a Virtual Threads context — both constructs pin the carrier platform thread for the duration of the synchronized block or scoped access, negating the scheduling benefit of virtual threads and reproducing platform-thread contention.
+**Detects:** `synchronized` or `ThreadLocal` usage in a Virtual Threads context — `synchronized` pins the virtual thread to its carrier platform thread for the duration of the block (JEP 444), negating the scheduling benefit of virtual threads.
 
-**Observed in:** [Lab 01 — Virtual Threads](https://github.com/Joaquinriosheredia/Java-Production-Labs/tree/main/01_virtual_threads)
-
-**Evidence:** Benchmark measured 7.4× throughput gain (1,058 req/s vs. 142 req/s) and 12× lower median latency (103ms vs. 1,280ms) with a virtual thread executor versus a fixed platform thread pool of 20 under 200 concurrent VUs. Code using `synchronized` inside virtual thread context reverts to platform-thread pinning behavior, suppressing the throughput gains demonstrated in this lab.
+**Evidence:** Documented mechanism, no benchmark of our own. Pinning is documented in JEP 444. Lab 01 in Java-Production-Labs compares virtual threads with a fixed platform pool; it does not measure pinning, so it is not cited here.
 
 ---
 
@@ -122,9 +127,7 @@ Each rule was designed around a failure mode observed in [Java-Production-Labs](
 
 **Detects:** Blocking external call (HTTP, sleep, file I/O, `Future.get()`) inside `@Transactional` — holds a HikariCP connection open during the blocking operation, reducing available pool slots and accelerating exhaustion under concurrent load.
 
-**Observed in:** [Lab 05 — Saga Pattern](https://github.com/Joaquinriosheredia/Java-Production-Labs/tree/main/05_saga_pattern)
-
-**Evidence:** `kafka.send().get()` inside `@Transactional startSaga()` observed to block HTTP threads when Kafka was unreachable — 60% of requests failed or timed out (35 of 50) during a simulated broker outage, while the actuator health endpoint continued reporting `UP`. The dual-write race condition produced 71.8% of orders permanently stuck in `STARTED` state with no recovery path, confirming that blocking sends inside transactions create both availability and consistency failures simultaneously.
+**Evidence:** Reproduced by `--verify VIBE-001`: the verifier's `@Transactional` method blocks while holding its connection, which is this rule's mechanism too.
 
 ---
 
@@ -132,9 +135,7 @@ Each rule was designed around a failure mode observed in [Java-Production-Labs](
 
 **Detects:** `@KafkaListener` without explicit `groupId`, or a blocking call inside a listener thread. **Scope:** the rule flags the blocking call itself as a risk signal — it does not read `max.poll.interval.ms` from configuration and does not evaluate whether the actual blocking duration would exceed it. A finding confirms the pattern is present, not that a rebalance will occur.
 
-**Observed in:** *Theoretical* — no Java-Production-Labs lab currently benchmarks blocking-listener-induced rebalance. [Lab 08 — Kafka Streams](https://github.com/Joaquinriosheredia/Java-Production-Labs/tree/main/08_kafka_streams) was previously cited here; on review it does not apply (see Evidence).
-
-**Evidence:** No verified production case yet for the blocking→`max.poll.interval.ms`→rebalance path. The mechanism is real and documented in the Kafka consumer specification: a blocking call inside `@KafkaListener` delays the consumer's next `poll()`, and if that delay exceeds `max.poll.interval.ms` the group coordinator marks the consumer dead and triggers a rebalance that halts partition processing across the group — but this project has not reproduced it in a benchmark of its own. Lab 08 was previously cited as evidence here; it does not apply: Lab 08 has no `@KafkaListener` anywhere in its source (`app/src/main/java`) — it's a Kafka Streams DSL app. The blocking call it exhibited, `kafkaTemplate.send(...).get(5, TimeUnit.SECONDS)` in `StreamController.publishOrder()` (`app/src/main/java/com/labs/kafkastreams/controller/StreamController.java:53`), runs on an HTTP request thread inside a `@RestController` endpoint, not a consumer listener thread — it cannot trigger a group rebalance by this mechanism. The 60% request-failure rate and false `UP`/`RUNNING` health signal that benchmark measured are real findings, but they are evidence for the CLI's `kafka-send-timeout` rule (unbounded/under-timed blocking producer send — see CHANGELOG), not for `KafkaRebalanceHazardRule`. Rule retained as a defensive best practice based on the documented Kafka mechanism, pending a benchmark that actually reproduces blocking-listener → rebalance.
+**Evidence:** Documented mechanism, no benchmark of our own. In the Kafka consumer specification, a blocking call inside `@KafkaListener` delays the next `poll()`; if the delay exceeds `max.poll.interval.ms`, the group coordinator marks the consumer dead and rebalances the group. Lab 08 is not evidence for this rule: it is a Kafka Streams app with no `@KafkaListener`, and its blocking `send().get()` runs on an HTTP thread (evidence for the CLI's `kafka-send-timeout` rule instead).
 
 ---
 
@@ -142,9 +143,7 @@ Each rule was designed around a failure mode observed in [Java-Production-Labs](
 
 **Detects:** `MDC.put()` in `@Async` / `@Scheduled` without `MDC.clear()` — leaks request-scoped diagnostic context (request ID, customer ID, trace ID) across thread reuse in a shared thread pool, contaminating unrelated log lines in subsequent requests.
 
-**Observed in:** *Theoretical* — no Java-Production-Labs lab directly benchmarks MDC propagation failures.
-
-**Evidence:** No verified production case from Java-Production-Labs yet. Rule retained as a defensive best practice based on the documented risk of thread-pool reuse corrupting MDC context across `@Async`/`@Scheduled` executions, pending a real-world incident to confirm it in the wild.
+**Evidence:** Documented mechanism, no benchmark of our own. MDC is thread-local (SLF4J documentation), so values survive into the next task on a reused pool thread unless cleared.
 
 ---
 
@@ -282,7 +281,7 @@ What makes it solid is not the sophistication of any individual layer, but that 
 
 ## Validation
 
-- **143 tests**, 0 false positives — MCP's curated unit test suite (`mvn test` in `mcp-server/`).
+- **148 tests**, 0 false positives on the curated fixtures — MCP's unit test suite (`mvn test` in `mcp-server/`).
 - CLI `validate-public` pipeline run on **2 real-world Spring Boot repositories**,
   pinned to fixed commits (see [`validation/repos.json`](validation/repos.json)):
   - [`eugenp/tutorials`](https://github.com/eugenp/tutorials) @ `ccab8a7` — 29,141 files scanned
