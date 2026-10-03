@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-10T20:08:13.589Z",
-  "cliVersion": "1.0.3",
+  "generatedAt": "2026-10-03T20:15:38.010Z",
+  "cliVersion": "2.0.0",
   "manifest": [
     {
       "repo": "eugenp/tutorials",
@@ -17,11 +17,11 @@
     "reposUnavailable": 0,
     "filesScanned": 29218,
     "findings": {
-      "critical": 22,
+      "critical": 20,
       "major": 220,
-      "warning": 2667,
+      "warning": 2616,
       "info": 0,
-      "reported": 2909
+      "reported": 2856
     }
   },
   "perRepo": [
@@ -34,9 +34,9 @@
       "errorType": null,
       "filesScanned": 29141,
       "findings": {
-        "critical": 22,
+        "critical": 20,
         "major": 211,
-        "warning": 2649,
+        "warning": 2598,
         "info": 0
       },
       "healthy": false

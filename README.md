@@ -287,13 +287,18 @@ What makes it solid is not the sophistication of any individual layer, but that 
   - [`eugenp/tutorials`](https://github.com/eugenp/tutorials) @ `ccab8a7` — 29,141 files scanned
   - [`spring-projects/spring-petclinic`](https://github.com/spring-projects/spring-petclinic) @ `88e37c1` — 77 files scanned
   - **29,218 files scanned in total.**
-- Both repository validations completed successfully. Reproducibility was
-  verified by running the pipeline twice against the same pinned commits:
-  the resulting JSON artifacts were byte-identical except for the four
+- CLI version `2.0.0` (run 2026-10-03). Both repository validations
+  completed successfully: **2,856 findings** reported — 20 critical,
+  220 major, 2,616 warning (`eugenp/tutorials`: 20 / 211 / 2,598;
+  `spring-petclinic`: 0 / 9 / 18). Source:
+  [`validation/results/summary.json`](validation/results/summary.json)
+  and [`REPORT.md`](validation/results/REPORT.md).
+- Reproducibility: the pipeline was run twice against the same pinned
+  commits; the JSON artifacts were identical except for the four
   run-specific fields excluded by docs/validation-contract.md §5.
-- CLI version `1.0.3`. Per-rule/per-repo finding counts (2,909 findings
-  reported in this run) are not reproduced here — see the generated
-  artifact (`validation/results/summary.json`) for the detailed breakdown.
+- These are findings reported, not confirmed bugs: no precision audit has
+  been run on them. The previous run (CLI 1.0.3, 2,909 findings) is
+  replaced; the rule set changed in 2.0.0.
 
 ## Found in the Wild
 
