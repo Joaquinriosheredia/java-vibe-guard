@@ -36,6 +36,10 @@ one version on both channels (npm `2.0.0`, Action `@v2` / `@v2.0.0`).
 
 - `testcontainers-doctor` is now a dependency (pinned to `1.0.0`: `--verify`
   parses its output text) — no global install needed.
+- `--verify` runs only the doctor's `docker` and `java` checks (in parallel,
+  60 s timeout). A full doctor run includes network checks (Docker Hub DNS,
+  image pull) that could exceed the old 15 s timeout on slow networks and
+  abort with a misleading "could not be run"; a timeout is now reported as such.
 - `--verify` runs the bundled app from a temp copy, so it works from a
   read-only install and leaves no build output in the package.
 - The npm package ships only `bin/`, `src/`, `verify/` and `README.md`

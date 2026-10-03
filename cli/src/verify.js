@@ -29,18 +29,34 @@ function tcDoctorCommand() {
   }
 }
 
-function runTCDoctor() {
+// verify only needs the doctor's `docker` and `java` sections. Running just
+// those (`--check`, in parallel) skips its network checks (Docker Hub DNS,
+// image pull), which made a full run exceed the old 15 s timeout on slow
+// networks/CI runners. Resolves { sections } or { error: 'timeout'|'failed' }.
+const TC_DOCTOR_TIMEOUT_MS = 60_000;
+
+function runTCDoctorCheck(check) {
   return new Promise((resolve) => {
     const { cmd, args } = tcDoctorCommand();
-    const tc = spawn(cmd, [...args, '--json', '--no-color'], { timeout: 15_000 });
+    const tc = spawn(cmd, [...args, '--json', '--no-color', '--check', check], { timeout: TC_DOCTOR_TIMEOUT_MS });
     let out = '';
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; }, TC_DOCTOR_TIMEOUT_MS);
     tc.stdout.on('data', (d) => { out += d; });
     tc.on('close', () => {
-      try { resolve(JSON.parse(out)); }
-      catch { resolve(null); }
+      clearTimeout(timer);
+      try { resolve({ sections: JSON.parse(out).sections ?? {} }); }
+      catch { resolve({ error: timedOut ? 'timeout' : 'failed' }); }
     });
-    tc.on('error', () => resolve(null));
+    tc.on('error', () => { clearTimeout(timer); resolve({ error: 'failed' }); });
   });
+}
+
+async function runTCDoctor() {
+  const results = await Promise.all(['docker', 'java'].map(runTCDoctorCheck));
+  const failed = results.find(r => r.error);
+  if (failed) return { error: failed.error };
+  return { sections: Object.assign({}, ...results.map(r => r.sections)) };
 }
 
 function findCheck(data, section, name) {
@@ -131,7 +147,11 @@ export async function runVerify(rule) {
 
   const tc = await runTCDoctor();
 
-  if (!tc) {
+  if (tc.error === 'timeout') {
+    console.log(chalk.red(`✗ testcontainers-doctor did not finish within ${TC_DOCTOR_TIMEOUT_MS / 1000}s — is the Docker daemon responsive?`));
+    return 2;
+  }
+  if (tc.error) {
     console.log(chalk.red('✗ testcontainers-doctor could not be run — reinstall java-vibe-guard (it ships as a dependency)'));
     return 2;
   }
