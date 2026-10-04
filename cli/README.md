@@ -61,6 +61,12 @@ Measured for **`@Async`** with a pre-registered experiment ([`verify/blocking`](
 
 `@Scheduled` and `@EventListener` were not measured: documented mechanism, no benchmark of our own.
 
+**Severity with virtual threads.** A blocking call whose only anchor is `@Async` is reported as **WARNING** instead of CRITICAL when the module's base configuration enables virtual threads. The measured reason is variant D of the same experiment: with `spring.threads.virtual.enabled=true`, the default `@Async` executor did not saturate. The finding says why it was lowered and cites variant D. The check is conservative, so a severity is never lowered by mistake:
+
+- **WARNING** only if `spring.threads.virtual.enabled=true` (literal) appears in the base `application.properties` or `application.yml` of the module the file belongs to (the nearest `pom.xml` / `build.gradle`; the file must be under `src/main/java`), and no other config file, profile or profile document sets it to anything else.
+- **Stays CRITICAL** when the key is only in a profile (`application-prod.yml`, an `on-profile` document), set to `false`, absent, a placeholder (`${…}`), overridden by a profile, or the module cannot be determined. A flag set only by an environment variable or on the command line is not visible to a static scan, so it stays CRITICAL too.
+- `@Scheduled` and `@EventListener` (not measured), and a call under `@Async` plus one of them, stay CRITICAL. `blocking-kafka` is unchanged.
+
 ### Evidence for `blocking-kafka`
 
 Measured with a pre-registered experiment ([`verify/blocking-kafka`](verify/blocking-kafka/), design committed before any run, all criteria met; [results](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/a6f32ef/cli/verify/blocking-kafka/results/criteria.md)):

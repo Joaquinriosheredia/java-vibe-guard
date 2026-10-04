@@ -40,6 +40,21 @@ export const FIXTURE_LEDGER = {
   'TransactionsTruePositive.java':                { transactions: { critical: 1 } },
   'nested/module-a/OrderService.java':            { transactions: { critical: 1 } },
   'nested/module-b/OrderService.java':            { transactions: { critical: 1 } },
+  // Phase 2 (2026-10-04): `blocking` → WARNING only for an @Async-only call in a module
+  // whose base application.properties / application.yml sets
+  // spring.threads.virtual.enabled=true and nothing else sets it otherwise.
+  'virtual-threads/base-enabled/src/main/java/demo/AsyncService.java':     { blocking: { warning: 1 } },
+  'virtual-threads/base-enabled-yml/src/main/java/demo/AsyncService.java': { blocking: { warning: 1 } },
+  // Same enabled module: @Scheduled and @Async + @Scheduled stay CRITICAL (not
+  // measured); blocking-kafka unchanged; the kafka DLQ warning is a true positive.
+  'virtual-threads/base-enabled/src/main/java/demo/ScheduledJob.java':     { blocking: { critical: 2 }, 'blocking-kafka': { critical: 1 }, kafka: { warning: 1 } },
+  // Conservative cases: stay CRITICAL.
+  'virtual-threads/profile-only/src/main/java/demo/AsyncService.java':                  { blocking: { critical: 1 } },
+  'virtual-threads/profile-document/src/main/java/demo/AsyncService.java':              { blocking: { critical: 1 } },
+  'virtual-threads/disabled/src/main/java/demo/AsyncService.java':                      { blocking: { critical: 1 } },
+  'virtual-threads/absent/src/main/java/demo/AsyncService.java':                        { blocking: { critical: 1 } },
+  'virtual-threads/base-enabled-profile-disabled/src/main/java/demo/AsyncService.java': { blocking: { critical: 1 } },
+  'virtual-threads/placeholder/src/main/java/demo/AsyncService.java':                   { blocking: { critical: 1 } },
   // Expected to produce zero findings (listed for completeness, not required):
   // BlockingAnomalouslyLongMethodProbe, BlockingFalsePositive,
   // BlockingWindowCommentProbe, BlockingWindowMisattributionProbe (0a: their

@@ -49,7 +49,7 @@ therefore adds one field per entry:
 
 ```js
 {
-  blocking:            { short, full, severities: ['critical'] },
+  blocking:            { short, full, severities: ['critical', 'warning'] },
   'blocking-kafka':    { short, full, severities: ['critical'] },
   kafka:               { short, full, severities: ['warning'] },
   'kafka-send-timeout': { short, full, severities: ['critical'] },
@@ -68,8 +68,8 @@ established in `reporter.js`'s `SEVERITY_ORDER` / `sarif.js`'s
 every distinct severity that rule id's `findings.push(...)` call sites in
 `cli/src/rules/*.js` can produce:
 
-- `blocking` / `blocking-kafka`: always `critical`
-  (`cli/src/rules/blocking.js:49`, same literal for both rule ids).
+- `blocking`: `critical`, and `warning` for an `@Async`-only call in a module whose base config enables virtual threads (see `cli/src/rules/virtual-threads.js`). `blocking-kafka`: always `critical`
+  (`cli/src/rules/blocking.js`, `mergeByCall`, same call site for both rule ids).
 - `kafka`: always `warning` (`cli/src/rules/kafka.js:22,51,62,80`, all four
   call sites).
 - `kafka-send-timeout`: always `critical` (`cli/src/rules/kafka.js:154`,

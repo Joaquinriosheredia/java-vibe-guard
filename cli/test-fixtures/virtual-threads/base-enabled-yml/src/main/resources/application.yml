@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: demo
+  threads:
+    virtual:
+      enabled: true   # Java 21

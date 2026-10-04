@@ -1,5 +1,11 @@
 import { stripComments } from './strip-comments.js';
 import { extractMethodBodyRange } from './method-body.js';
+import { relative } from 'path';
+import { virtualThreadsEnabled, VT_KEY } from './virtual-threads.js';
+
+// Measured evidence for the WARNING downgrade: verify/blocking variant D (virtual
+// threads enabled) did not saturate the default @Async executor.
+const VARIANT_D_SOURCE = 'https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c4e5ddd/cli/verify/blocking/results/criteria.md#L38-L38';
 
 const ASYNC_ANNOTATIONS = [
   { re: /@Scheduled\b/,    name: '@Scheduled' },
@@ -114,6 +120,7 @@ export function checkBlocking(fileContexts) {
               call: name,
               annotationName,
               location: `${relativePath}:${i + 1}`,
+              filePath,
             });
           }
         }
@@ -131,6 +138,12 @@ export function checkBlocking(fileContexts) {
 // The call stays in the key so two different blocking calls on one line are
 // still two findings. Single-anchor messages keep their exact pre-2.0 text,
 // so existing vibeguard-baseline.json buckets (keyed on the message) still match.
+//
+// Severity: CRITICAL, except a `blocking` finding whose only anchor is @Async in a
+// module whose base configuration enables virtual threads (virtual-threads.js):
+// WARNING, with the reason and the measured evidence in the message. @Scheduled
+// and @EventListener were not measured, so a call under them stays CRITICAL even
+// when @Async is also present.
 function mergeByCall(rawFindings) {
   const merged = new Map();
   for (const f of rawFindings) {
@@ -142,12 +155,20 @@ function mergeByCall(rawFindings) {
       entry.annotations.push(f.annotationName);
     }
   }
-  return [...merged.values()].map(({ rule, call, annotations, location }) => ({
-    severity: 'critical',
-    rule,
-    message: annotations.length === 1
+  return [...merged.values()].map(({ rule, call, annotations, location, filePath }) => {
+    const message = annotations.length === 1
       ? `${call} detected in ${annotations[0]} method`
-      : `${call} detected in method annotated ${annotations.join(', ')}`,
-    location,
-  }));
+      : `${call} detected in method annotated ${annotations.join(', ')}`;
+    const vt = rule === 'blocking' && annotations.length === 1 && annotations[0] === '@Async'
+      ? virtualThreadsEnabled(filePath)
+      : { enabled: false };
+    if (!vt.enabled) return { severity: 'critical', rule, message, location };
+    return {
+      severity: 'warning',
+      rule,
+      message: `${message} — WARNING, not CRITICAL: ${VT_KEY}=true in ${relative(vt.root, vt.file)}, and with virtual threads `
+        + `enabled the default @Async executor did not saturate (measured, verify/blocking variant D: ${VARIANT_D_SOURCE})`,
+      location,
+    };
+  });
 }
