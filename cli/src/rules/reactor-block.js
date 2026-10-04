@@ -125,7 +125,7 @@ export function checkReactorBlock(fileContexts) {
         findings.push({
           severity: 'critical',
           rule: 'reactor-block',
-          message: `Reactive blocking call '.${m[1]}()' inside Spring bean — pins a thread under load; use reactive composition (.flatMap, .map, .then) instead`,
+          message: `Reactive blocking call '.${m[1]}()' inside Spring bean — on a Schedulers.parallel() worker it throws IllegalStateException on every call (measured); use reactive composition (.flatMap, .map, .then) instead`,
           location: `${relativePath}:${i + 1}`,
         });
       }

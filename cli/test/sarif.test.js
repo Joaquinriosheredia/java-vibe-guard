@@ -134,7 +134,7 @@ const fixtureFindings = [
   finding({
     rule: 'reactor-block',
     severity: 'critical',
-    message: "Reactive blocking call '.block()' inside Spring bean — pins a thread under load; use reactive composition (.flatMap, .map, .then) instead",
+    message: "Reactive blocking call '.block()' inside Spring bean — on a Schedulers.parallel() worker it throws IllegalStateException on every call (measured); use reactive composition (.flatMap, .map, .then) instead",
     location: 'src/main/java/com/example/search/FileContentSearchService.java:12',
   }),
   finding({
