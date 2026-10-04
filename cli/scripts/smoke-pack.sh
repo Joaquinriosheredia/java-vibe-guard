@@ -73,6 +73,22 @@ if (sarif.runs[0].tool.driver.version !== version) throw new Error('SARIF driver
 if (sarif.runs[0].results.length !== json.issues.length) throw new Error('SARIF and JSON disagree on the finding count');
 EOF
 
+# 2.1.0: blocking → WARNING for @Async when the module's base config enables virtual
+# threads (virtual-threads.js must be in the package); the profile-only module stays CRITICAL.
+cp -r "$CLI_DIR/test-fixtures/virtual-threads/base-enabled" vt-on
+cp -r "$CLI_DIR/test-fixtures/virtual-threads/profile-only" vt-profile
+for m in vt-on vt-profile; do
+  "${JVG[@]}" "$m" --rule blocking --format json > "$m.json" || true
+done
+node - <<'EOF'
+const fs = require('fs');
+const find = (m) => JSON.parse(fs.readFileSync(`${m}.json`, 'utf8')).issues
+  .find(i => i.location === 'src/main/java/demo/AsyncService.java:9');
+const on = find('vt-on'), profile = find('vt-profile');
+if (on?.severity !== 'warning' || !on.message.includes('verify/blocking variant D')) throw new Error(`virtual threads in the base config: expected WARNING citing variant D, got ${JSON.stringify(on)}`);
+if (profile?.severity !== 'critical') throw new Error(`virtual threads only in a profile: expected CRITICAL, got ${JSON.stringify(profile)}`);
+EOF
+
 if [[ "${SMOKE_VERIFY:-0}" == "1" ]]; then
   echo "running the real --verify VIBE-001 from the installed package…"
   "${JVG[@]}" --verify VIBE-001 --no-color || fail "--verify VIBE-001 failed from the installed package"
@@ -80,4 +96,4 @@ if [[ "${SMOKE_VERIFY:-0}" == "1" ]]; then
     || fail "--verify wrote build output inside the installed package"
 fi
 
-echo "SMOKE OK: $TARBALL installed in a clean project — version, help, scan, SARIF, explain, verify registry$([[ "${SMOKE_VERIFY:-0}" == "1" ]] && echo ', full --verify VIBE-001')"
+echo "SMOKE OK: $TARBALL installed in a clean project — version, help, scan, SARIF, explain, verify registry, virtual-threads severity$([[ "${SMOKE_VERIFY:-0}" == "1" ]] && echo ', full --verify VIBE-001')"
