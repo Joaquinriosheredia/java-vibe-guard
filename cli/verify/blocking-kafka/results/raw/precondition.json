@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-10-04T07:16:31.679Z",
+  "projectPath": "app/src/main/java",
+  "filesScanned": 9,
+  "summary": {
+    "critical": 1,
+    "major": 0,
+    "warning": 0,
+    "info": 0,
+    "reported": 1,
+    "suppressed": 0,
+    "total": 1
+  },
+  "healthy": false,
+  "issues": [
+    {
+      "severity": "critical",
+      "ruleId": "blocking-kafka",
+      "message": "blocking .join() detected in @KafkaListener method",
+      "location": "com/javavibeguard/blockingkafka/Listener.java:31"
+    }
+  ]
+}
