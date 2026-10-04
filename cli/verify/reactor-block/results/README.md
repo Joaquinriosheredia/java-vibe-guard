@@ -36,14 +36,14 @@ Reproduce: `./run-experiment.sh` (about 2 h), or only the evaluation: `python3 e
   `IllegalStateException` ("block()/blockFirst()/blockLast() are blocking, which is not
   supported in thread parallel-N").
 - 0–0.9 % of the workers' samples are inside `blockingGet`.
-- The probe on the same workers answers with p99 ≤ 3 ms.
+- The probe on the same workers answers with p99 ≤ 8 ms in every run.
 
 The call does not hold the thread: it fails on every request, at any load.
 
 **A1: `.block()` on the event loop.** Same picture:
 - 100 % HTTP 500 with the ISE naming `reactor-http-epoll-N`;
 - 0–0.4 % of the loops' samples inside `blockingGet`;
-- probe p99 ≤ 3 ms.
+- probe p99 ≤ 10 ms in every run.
 
 The pre-registered window count gave 97.0 % at λ = 10 because of the clock divergence
 (DEVIATIONS.md, 4), so the pre-registered verdict is "fits neither".
@@ -71,7 +71,7 @@ repetition). No main request ever completed.
 
 **A4 and C.**
 - Neither stalls any Reactor thread: 0 % of event-loop or `parallel` samples in
-  `blockingGet`, probes p99 ≤ 3 ms at every λ.
+  `blockingGet`, probes p99 ≤ 4 ms in every run.
 - A4 runs out of `boundedElastic` threads at λ = 400, as predicted for a bounded pool:
   99.9 % of its samples in `blockingGet`, 54 successful responses/s (cap 200/s), 94 % of
   requests timed out.
