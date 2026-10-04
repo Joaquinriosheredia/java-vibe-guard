@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 2.1.0
+
+npm `2.1.0`, Action `@v2.1.0` / `@v2`. CLI only: the MCP server is unchanged, and its
+jar stays the one attached to the v2.0.0 release. The only severity change is a
+downgrade: `blocking` under `@Async` can go from CRITICAL to WARNING when virtual
+threads are enabled. No finding becomes more severe, and detection does not change.
 
 - **`blocking` evidence is now measured for `@Async`.** Pre-registered experiment
   (`cli/verify/blocking/`, design committed before any run, all criteria met): on
@@ -9,7 +14,8 @@
   with 8 threads, 79.8 with 16); above that the queue grows at (load − capacity). With
   virtual threads enabled the executor did not saturate. `@Scheduled` and
   `@EventListener` keep "documented mechanism". The evidence lines of a `blocking`
-  finding change accordingly; detection and severity do not.
+  finding change accordingly; detection does not (severity: see the virtual-threads
+  entry below).
 - **`blocking-kafka` evidence is now measured.** Pre-registered experiment
   (`cli/verify/blocking-kafka/`, design committed before any run, all criteria met):
   - the damage appears only when max.poll.records × time per record >
@@ -35,6 +41,8 @@
   findings were such `@Async` calls now exits 0.
 - New test (`evidence.test.js`): measured evidence must cite a source pinned to a commit
   with a line range; for this repository, the file and lines must exist at that commit.
+- The packaged-tarball smoke test also checks the virtual-threads severity on the
+  installed package.
 
 ## 2.0.0
 

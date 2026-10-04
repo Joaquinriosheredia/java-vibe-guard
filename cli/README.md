@@ -6,6 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js ≥18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
+> **2.1.0:** measured evidence for `blocking` (`@Async`) and `blocking-kafka`, and `blocking` under `@Async` is WARNING instead of CRITICAL when the module's base config enables virtual threads. No finding becomes more severe. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#210).
+>
 > **2.0.0 is a major release:** two CRITICAL rules run by default that 1.0.3 did not have (`reactor-block`, `kafka-send-timeout`), and `blocking` changed how it matches `.get()`. A CI that was green on 1.0.3 can turn red. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#200).
 
 ---
@@ -84,7 +86,7 @@ When a reactive `.block()` matches both `blocking` and `reactor-block` on the sa
 
 ## Example output
 
-Real output of the current source (unreleased; only the `blocking` and `blocking-kafka` evidence lines differ from 2.0.0) on [java-vibe-guard-demo](https://github.com/Joaquinriosheredia/java-vibe-guard-demo):
+Real output of 2.1.0 (only the `blocking` and `blocking-kafka` evidence lines differ from 2.0.0) on [java-vibe-guard-demo](https://github.com/Joaquinriosheredia/java-vibe-guard-demo):
 
 ```
 
