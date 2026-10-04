@@ -63,7 +63,19 @@ export const RULE_CATALOG = {
     short: 'Blocking calls detected inside @KafkaListener methods.',
     full: 'Detects blocking calls inside @KafkaListener-annotated methods, which delays offset commits and can trigger a consumer group rebalance under broker latency or failure.',
     severities: ['critical'],
-    evidence: { kind: 'mechanism', text: 'a blocking call delays the consumer\'s next poll(); past max.poll.interval.ms the group coordinator considers the consumer dead and rebalances the group (Kafka consumer docs)' },
+    evidence: {
+      kind: 'measured',
+      results: [
+        {
+          lab: 'java-vibe-guard verify/blocking-kafka — @KafkaListener',
+          // Pre-registered experiment (PREREGISTRATION.md at 8cb235b), results at a6f32ef:
+          // criteria (0), (a)-(h) met; deviations 1-2 in DEVIATIONS.md. The threshold is given
+          // in general form; the 10 s max.poll.interval.ms of the runs is an accelerated setup.
+          text: 'the damage appears only when max.poll.records x time per record > max.poll.interval.ms (with the defaults, 500 records and 300 s: more than 600 ms per record). Above it, in an accelerated setup (max.poll.interval.ms lowered to 10 s), the consumer left the group on every batch, every offset commit failed and the group entered a reprocessing loop: 0 records/s committed, each record delivered ~10 times. Below it, the same blocking call caused no measured damage: no rebalances, no duplicates, throughput = consumers / time per record. Measured on kafka-clients 3.6.2, classic group protocol with eager rebalancing, spring-kafka AckMode BATCH; the cooperative protocol, KIP-848 and AckMode RECORD were not measured',
+          source: 'https://github.com/Joaquinriosheredia/java-vibe-guard/blob/a6f32ef/cli/verify/blocking-kafka/results/criteria.md#L7-L47',
+        },
+      ],
+    },
   },
   kafka: {
     short: 'Kafka listener, consumer group, and Zookeeper configuration issues.',

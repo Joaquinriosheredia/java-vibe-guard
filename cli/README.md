@@ -61,13 +61,24 @@ Measured for **`@Async`** with a pre-registered experiment ([`verify/blocking`](
 
 `@Scheduled` and `@EventListener` were not measured: documented mechanism, no benchmark of our own.
 
+### Evidence for `blocking-kafka`
+
+Measured with a pre-registered experiment ([`verify/blocking-kafka`](verify/blocking-kafka/), design committed before any run, all criteria met; [results](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/a6f32ef/cli/verify/blocking-kafka/results/criteria.md)):
+
+- **Threshold, general form:** `max.poll.records × time per record > max.poll.interval.ms`. With the Kafka defaults (500 records, 300 s) that is **more than 600 ms per record**.
+- **Above it** (accelerated setup, `max.poll.interval.ms` lowered to 10 s): the consumer left the group on every batch and every offset commit failed. The group entered a **reprocessing loop**: 0 records/s committed, each record delivered ~10 times.
+- **Below it, the same blocking call caused no measured damage**: no rebalances and no duplicates, with throughput at consumers / time per record. This held with a batch of 1 and with a higher `max.poll.interval.ms`.
+- **Limits:** measured on kafka-clients 3.6.2 (Kafka 3.6 broker), the classic consumer group protocol with eager rebalancing (range assignor), and spring-kafka's default AckMode BATCH. Not measured: the cooperative protocol, the KIP-848 consumer group protocol, AckMode RECORD, static membership and virtual-thread listeners.
+
+The rule flags the blocking call; it does not read `max.poll.records` or `max.poll.interval.ms`, so a finding means the pattern is present, not that the threshold is crossed.
+
 When a reactive `.block()` matches both `blocking` and `reactor-block` on the same line, only `reactor-block` is reported. A call inside a method with several anchors (e.g. `@Async` + `@Scheduled`) is reported once: `Thread.sleep() detected in method annotated @Async, @Scheduled`.
 
 ---
 
 ## Example output
 
-Real output of the current source (unreleased; only the `blocking` evidence lines differ from 2.0.0) on [java-vibe-guard-demo](https://github.com/Joaquinriosheredia/java-vibe-guard-demo):
+Real output of the current source (unreleased; only the `blocking` and `blocking-kafka` evidence lines differ from 2.0.0) on [java-vibe-guard-demo](https://github.com/Joaquinriosheredia/java-vibe-guard-demo):
 
 ```
 
@@ -75,7 +86,8 @@ java-vibe-guard — vibe coding detector for Java/Spring Boot
 Scanning: .  (3 files)
 
 ❌ CRITICAL: Thread.sleep() detected in @KafkaListener method → src/main/java/demo/KafkaConsumerBug.java:9
-  Evidence: documented mechanism, no benchmark of our own — a blocking call delays the consumer's next poll(); past max.poll.interval.ms the group coordinator considers the consumer dead and rebalances the group (Kafka consumer docs)
+  Evidence (measured, java-vibe-guard verify/blocking-kafka — @KafkaListener): the damage appears only when max.poll.records x time per record > max.poll.interval.ms (with the defaults, 500 records and 300 s: more than 600 ms per record). Above it, in an accelerated setup (max.poll.interval.ms lowered to 10 s), the consumer left the group on every batch, every offset commit failed and the group entered a reprocessing loop: 0 records/s committed, each record delivered ~10 times. Below it, the same blocking call caused no measured damage: no rebalances, no duplicates, throughput = consumers / time per record. Measured on kafka-clients 3.6.2, classic group protocol with eager rebalancing, spring-kafka AckMode BATCH; the cooperative protocol, KIP-848 and AckMode RECORD were not measured
+  Source: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/a6f32ef/cli/verify/blocking-kafka/results/criteria.md#L7-L47
 ❌ CRITICAL: blocking Future.get() detected in @Async method → src/main/java/demo/OrderService.java:22
   Evidence (measured, java-vibe-guard verify/blocking — @Async): on Spring Boot's default @Async executor (8 platform threads, unbounded queue), a call that holds the thread caps throughput at threads / call duration: 39.9-40.0 tasks/s with 8 threads, 79.8 with 16. Above that the queue grows at (load - capacity) and 98-99.5% of latency is queue wait; the same call without holding the thread did not queue. With virtual threads enabled (spring.threads.virtual.enabled=true) the executor did not saturate
   Source: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c4e5ddd/cli/verify/blocking/results/criteria.md#L7-L38

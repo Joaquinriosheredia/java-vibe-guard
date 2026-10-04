@@ -1093,7 +1093,10 @@ console.log('\n📋 Test 18b: Future.get() on Future-typed receivers; .block() r
     assert(blockingEvidence.includes("Evidence (measured, java-vibe-guard verify/blocking — @Async): on Spring Boot's default @Async executor"), 'blocking: measured evidence for @Async');
     assert(/Source: https:\/\/github\.com\/Joaquinriosheredia\/java-vibe-guard\/blob\/c4e5ddd\/cli\/verify\/blocking\/results\/criteria\.md#L7-L38/.test(blockingEvidence), 'blocking: source pinned to the results commit');
     assert(blockingEvidence.includes('Evidence (@Scheduled, @EventListener): documented mechanism, no benchmark of our own'), 'blocking: @Scheduled/@EventListener stay documented mechanism');
-    assert(evidenceAfter('detected in @KafkaListener').includes('max.poll.interval.ms'), 'blocking-kafka: max.poll.interval.ms → rebalance mechanism, no benchmark');
+    // blocking-kafka: measured (verify/blocking-kafka, pre-registered, results pinned to a6f32ef).
+    const bkEvidence = linesAfter('detected in @KafkaListener', 2);
+    assert(bkEvidence.includes('Evidence (measured, java-vibe-guard verify/blocking-kafka — @KafkaListener): the damage appears only when max.poll.records x time per record > max.poll.interval.ms'), 'blocking-kafka: measured evidence, threshold in general form');
+    assert(/Source: https:\/\/github\.com\/Joaquinriosheredia\/java-vibe-guard\/blob\/a6f32ef\/cli\/verify\/blocking-kafka\/results\/criteria\.md#L7-L47/.test(bkEvidence), 'blocking-kafka: source pinned to the results commit');
     assert(evidenceAfter("Reactive blocking call").includes('documented mechanism'), 'reactor-block: documented mechanism, no benchmark of our own');
     const sources = text.split('\n').filter(l => l.trim().startsWith('Source: '));
     assert(sources.some(l => /Java-Production-Labs\/blob\/727f42c\/05_saga_pattern\/benchmark\/results\/summary\.md#L53-L67/.test(l)), 'kafka-send-timeout cites Lab 05 results pinned to the result commit');

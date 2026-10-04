@@ -11,7 +11,9 @@
  *
  * Plus the specific wording decided for `blocking` (2026-10-04): condition stated,
  * capacity figures, virtual threads, no absolute latencies, and @Scheduled /
- * @EventListener kept as documented mechanism.
+ * @EventListener kept as documented mechanism. And for `blocking-kafka` (2026-10-04):
+ * the threshold in general form with the defaults' equivalent, the reprocessing loop
+ * above it, no measured damage below it, and the limits (versions and protocol).
  *
  * Run: node test/evidence.test.js
  */
@@ -97,6 +99,27 @@ test('cites the pre-registered results at c4e5ddd', () =>
   assert(blocking.results[0].source.includes('/blob/c4e5ddd/cli/verify/blocking/results/criteria.md'), blocking.results[0].source));
 test('@Scheduled and @EventListener stay documented mechanism', () =>
   assert(blocking.mechanism?.scope === '@Scheduled, @EventListener' && !/\d/.test(blocking.mechanism.text), JSON.stringify(blocking.mechanism)));
+
+console.log('\nblocking-kafka: wording decided on 2026-10-04');
+const bk = RULE_CATALOG['blocking-kafka'].evidence;
+const bkText = (bk.results ?? []).map(r => r.text).join(' ');
+test('is measured, one result', () => assert(bk.kind === 'measured' && bk.results.length === 1, JSON.stringify(bk)));
+test('states the threshold in general form', () =>
+  assert(/max\.poll\.records x time per record > max\.poll\.interval\.ms/.test(bkText), bkText));
+test('gives the defaults\' equivalent: 500 records, 300 s, more than 600 ms per record', () =>
+  assert(/500 records and 300 s: more than 600 ms per record/.test(bkText), bkText));
+test('presents the 10 s runs as an accelerated setup', () => assert(/accelerated setup \(max\.poll\.interval\.ms lowered to 10 s\)/.test(bkText), bkText));
+test('above the threshold: reprocessing loop, 0 records/s committed, each record delivered ~10 times', () =>
+  assert(/reprocessing loop: 0 records\/s committed, each record delivered ~10 times/.test(bkText), bkText));
+test('below the threshold: no measured damage from the same blocking call', () =>
+  assert(/Below it, the same blocking call caused no measured damage/.test(bkText), bkText));
+test('says the damage appears only above the threshold, not for any blocking call', () =>
+  assert(/damage appears only when/.test(bkText), bkText));
+test('states the limits: client version, protocol, cooperative and KIP-848 not measured', () =>
+  assert(/kafka-clients 3\.6\.2/.test(bkText) && /classic group protocol with eager rebalancing/.test(bkText)
+    && /cooperative protocol, KIP-848 and AckMode RECORD were not measured/.test(bkText), bkText));
+test('cites the pre-registered results at a6f32ef', () =>
+  assert(bk.results[0].source.includes('/blob/a6f32ef/cli/verify/blocking-kafka/results/criteria.md'), bk.results[0].source));
 
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`📊 Results: ${passed} passed, ${failed} failed`);
