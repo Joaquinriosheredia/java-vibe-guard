@@ -99,7 +99,7 @@ console.log('\n📋 §2: Data source — rule-catalog.js content and corrected c
 
   // severities field — new in this extraction, per docs/explain.md §2.
   assert(Array.isArray(RULE_CATALOG.blocking?.severities), 'blocking.severities is an array');
-  assert(RULE_CATALOG.blocking.severities.join(',') === 'critical', 'blocking: single severity, critical');
+  assert(RULE_CATALOG.blocking.severities.join(',') === 'critical,warning', 'blocking: critical, and warning for @Async with virtual threads enabled in the base config');
   assert(RULE_CATALOG['blocking-kafka'].severities.join(',') === 'critical', 'blocking-kafka: single severity, critical');
   assert(RULE_CATALOG.kafka.severities.join(',') === 'warning', 'kafka: single severity, warning');
   assert(RULE_CATALOG['kafka-send-timeout'].severities.join(',') === 'critical', 'kafka-send-timeout: single severity, critical');

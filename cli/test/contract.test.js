@@ -8,7 +8,7 @@
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { mkdtempSync, copyFileSync, rmSync, writeFileSync, mkdirSync } from 'fs';
+import { mkdtempSync, copyFileSync, rmSync, writeFileSync, mkdirSync, cpSync } from 'fs';
 import { tmpdir } from 'os';
 import { ledgerTotals, breakdownFromJson, diffAgainstLedger } from './fixture-ledger.js';
 import { applySuppressions } from '../src/suppression.js';
@@ -1151,6 +1151,49 @@ console.log('\n📋 Test 19: zero regression on test-fixtures/ with no config fi
   assert(json.summary.reported === EXPECTED.total && json.summary.total === EXPECTED.total, `reported === total === ${EXPECTED.total}`);
   assert(json.summary.suppressed === 0, 'suppressed is 0 — no config file, no directives');
   assert(exitCode === 1, 'exit code is 1, unchanged — real criticals still fail the build');
+}
+
+// ─── Test 20: blocking → WARNING with virtual threads (Phase 2, 2026-10-04) ───
+// Conservative: WARNING only for an @Async-only call when the module's base
+// application.properties / application.yml sets spring.threads.virtual.enabled=true and
+// nothing else sets it otherwise. Each module fixture is scanned on its own.
+console.log('\n📋 Test 20: blocking → WARNING only with virtual threads enabled in the base config');
+{
+  const VT = join(FIXTURES, 'virtual-threads');
+  const scan = (module) => JSON.parse(run(['--json', '--rule', 'blocking', join(VT, module)]).stdout).issues;
+  const asyncFinding = (issues) => issues.find(i => i.location === 'src/main/java/demo/AsyncService.java:9');
+
+  for (const [module, file] of [['base-enabled', 'application.properties'], ['base-enabled-yml', 'application.yml']]) {
+    const f = asyncFinding(scan(module));
+    assert(f?.severity === 'warning', `${module}: @Async .join() is WARNING`);
+    assert(f?.message.includes(`WARNING, not CRITICAL: spring.threads.virtual.enabled=true in src/main/resources/${file}`), `${module}: the message says why (key and file)`);
+    assert(f?.message.includes('with virtual threads enabled the default @Async executor did not saturate (measured, verify/blocking variant D: '
+      + 'https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c4e5ddd/cli/verify/blocking/results/criteria.md#L38-L38)'), `${module}: the message cites variant D, pinned`);
+  }
+  for (const module of ['profile-only', 'profile-document', 'disabled', 'absent', 'base-enabled-profile-disabled', 'placeholder']) {
+    const f = asyncFinding(scan(module));
+    assert(f?.severity === 'critical' && f.message === 'blocking .join() detected in @Async method', `${module}: stays CRITICAL with the unchanged message`);
+  }
+
+  const enabled = scan('base-enabled');
+  const job = enabled.filter(i => i.location.startsWith('src/main/java/demo/ScheduledJob.java'));
+  assert(job.length === 2 && job.every(i => i.severity === 'critical'), 'base-enabled: @Scheduled and @Async + @Scheduled stay CRITICAL (not measured)');
+  const kafka = JSON.parse(run(['--json', '--rule', 'blocking-kafka', join(VT, 'base-enabled')]).stdout).issues;
+  assert(kafka.length === 1 && kafka[0].severity === 'critical', 'base-enabled: blocking-kafka stays CRITICAL');
+
+  // A WARNING alone does not fail the build; the file outside a module stays CRITICAL.
+  const onlyWarning = mkdtempSync(join(tmpdir(), 'vibe-guard-vt-'));
+  try {
+    cpSync(join(VT, 'base-enabled'), onlyWarning, { recursive: true });
+    rmSync(join(onlyWarning, 'src/main/java/demo/ScheduledJob.java'));
+    const r = run(['--json', onlyWarning]);
+    assert(r.exitCode === 0 && JSON.parse(r.stdout).summary.warning === 1, 'a module whose only blocking finding is the WARNING exits 0');
+    rmSync(join(onlyWarning, 'pom.xml'));
+    const noModule = JSON.parse(run(['--json', '--rule', 'blocking', onlyWarning]).stdout).issues;
+    assert(noModule.length === 1 && noModule[0].severity === 'critical', 'no module root (no pom.xml / build.gradle): stays CRITICAL');
+  } finally {
+    rmSync(onlyWarning, { recursive: true, force: true });
+  }
 }
 
 // ─── Summary ─────────────────────────────────────────────────────────────────

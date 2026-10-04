@@ -20,8 +20,10 @@
 // Hand-maintained: if cli/src/rules/*.js ever changes what severity a rule
 // id emits, this array must be updated here too — nothing enforces the two
 // staying in sync automatically. Evidence for the eight values below:
-//   - blocking / blocking-kafka: always 'critical' (blocking.js:49, one
-//     shared findings.push call site for both rule ids).
+//   - blocking: 'critical', and 'warning' for a call whose only anchor is @Async
+//     in a module whose base configuration enables virtual threads
+//     (blocking.js mergeByCall, virtual-threads.js; measured: verify/blocking
+//     variant D). blocking-kafka: always 'critical' (same call site).
 //   - kafka: always 'warning' (kafka.js:22,51,62,80 — all four call sites).
 //   - kafka-send-timeout: always 'critical' (kafka.js:154, single call
 //     site). New rule, evidence: Java-Production-Labs SagaOrderService.java:45
@@ -41,8 +43,8 @@
 export const RULE_CATALOG = {
   blocking: {
     short: 'Blocking calls detected inside asynchronous execution contexts.',
-    full: 'Detects Thread.sleep(), .join(), .block()/.blockFirst()/.blockLast() and Future.get() inside methods annotated @Async, @Scheduled or @EventListener (@KafkaListener is reported as blocking-kafka). Blocking there pins a thread of the executor/scheduler pool and can exhaust it under load. Future.get() is only matched on a receiver this same file declares with a Future type (Future, CompletableFuture, ListenableFuture, ...) or on CompletableFuture.xxxAsync(...).get(); a bare .get() is not, to avoid Optional.get()/Map.get() false positives, so Futures declared in another file are not detected. Timed get(timeout, unit) is not flagged. A call under several anchors is reported once, naming all of them.',
-    severities: ['critical'],
+    full: 'Detects Thread.sleep(), .join(), .block()/.blockFirst()/.blockLast() and Future.get() inside methods annotated @Async, @Scheduled or @EventListener (@KafkaListener is reported as blocking-kafka). Blocking there pins a thread of the executor/scheduler pool and can exhaust it under load. Future.get() is only matched on a receiver this same file declares with a Future type (Future, CompletableFuture, ListenableFuture, ...) or on CompletableFuture.xxxAsync(...).get(); a bare .get() is not, to avoid Optional.get()/Map.get() false positives, so Futures declared in another file are not detected. Timed get(timeout, unit) is not flagged. A call under several anchors is reported once, naming all of them. Severity is critical, except WARNING for a call whose only anchor is @Async when the module\'s base application.properties / application.yml sets spring.threads.virtual.enabled=true and no other config file or profile sets it otherwise (measured: with virtual threads the default @Async executor did not saturate). Set only in a profile, by a placeholder, or not determinable: critical.',
+    severities: ['critical', 'warning'],
     evidence: {
       kind: 'measured',
       results: [

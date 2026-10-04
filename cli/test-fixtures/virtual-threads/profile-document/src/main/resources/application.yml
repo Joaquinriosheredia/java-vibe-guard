@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: demo
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  threads:
+    virtual:
+      enabled: true

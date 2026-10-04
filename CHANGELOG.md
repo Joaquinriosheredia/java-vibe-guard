@@ -24,6 +24,15 @@
   AckMode BATCH; the cooperative protocol and KIP-848 were not measured. The evidence
   lines of a `blocking-kafka` finding change accordingly; detection and severity do
   not.
+- **`blocking` is WARNING instead of CRITICAL for `@Async` when the module enables
+  virtual threads.** This applies only when the module's base `application.properties`
+  or `application.yml` sets `spring.threads.virtual.enabled=true` and no profile or
+  other config file sets it otherwise. The finding says why and cites the measured
+  evidence (verify/blocking variant D: with virtual threads the default `@Async`
+  executor did not saturate). Anything not determinable stays CRITICAL: the key only
+  in a profile, a placeholder, `false`, absent, or no module root. `@Scheduled`,
+  `@EventListener` and `blocking-kafka` are unchanged. A project whose only critical
+  findings were such `@Async` calls now exits 0.
 - New test (`evidence.test.js`): measured evidence must cite a source pinned to a commit
   with a line range; for this repository, the file and lines must exist at that commit.
 
