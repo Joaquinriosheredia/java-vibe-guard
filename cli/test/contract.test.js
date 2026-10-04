@@ -1086,7 +1086,13 @@ console.log('\n📋 Test 18b: Future.get() on Future-typed receivers; .block() r
     assert(!/Lab #0?4|Lab #0?8 — Kafka Streams\s*$|pool exhausted|throughput -74%|p99 \+18\.2s/m.test(text.split('kafka-send-timeout')[0] ?? text),
       'no retracted / other-mechanism figures (Lab #04 pool metrics, Lab #08 under blocking-kafka) are printed');
     const evidenceAfter = (needle) => text.split('\n')[text.split('\n').findIndex(l => l.includes(needle)) + 1] ?? '';
-    assert(evidenceAfter('detected in @Scheduled method → BlockingTruePositive').includes('documented mechanism, no benchmark of our own'), 'blocking: documented mechanism, no benchmark of our own');
+    // blocking: measured for @Async (verify/blocking, pre-registered, results pinned to c4e5ddd);
+    // @Scheduled / @EventListener stay "documented mechanism".
+    const linesAfter = (needle, n) => { const ls = text.split('\n'); const i = ls.findIndex(l => l.includes(needle)); return ls.slice(i + 1, i + 1 + n).join('\n'); };
+    const blockingEvidence = linesAfter('detected in @Scheduled method → BlockingTruePositive', 3);
+    assert(blockingEvidence.includes("Evidence (measured, java-vibe-guard verify/blocking — @Async): on Spring Boot's default @Async executor"), 'blocking: measured evidence for @Async');
+    assert(/Source: https:\/\/github\.com\/Joaquinriosheredia\/java-vibe-guard\/blob\/c4e5ddd\/cli\/verify\/blocking\/results\/criteria\.md#L7-L38/.test(blockingEvidence), 'blocking: source pinned to the results commit');
+    assert(blockingEvidence.includes('Evidence (@Scheduled, @EventListener): documented mechanism, no benchmark of our own'), 'blocking: @Scheduled/@EventListener stay documented mechanism');
     assert(evidenceAfter('detected in @KafkaListener').includes('max.poll.interval.ms'), 'blocking-kafka: max.poll.interval.ms → rebalance mechanism, no benchmark');
     assert(evidenceAfter("Reactive blocking call").includes('documented mechanism'), 'reactor-block: documented mechanism, no benchmark of our own');
     const sources = text.split('\n').filter(l => l.trim().startsWith('Source: '));

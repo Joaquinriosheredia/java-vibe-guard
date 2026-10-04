@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **`blocking` evidence is now measured for `@Async`.** Pre-registered experiment
+  (`cli/verify/blocking/`, design committed before any run, all criteria met): on
+  Spring Boot's default `@Async` executor (8 platform threads, unbounded queue) a call
+  that holds the thread caps throughput at threads / call duration (39.9–40.0 tasks/s
+  with 8 threads, 79.8 with 16); above that the queue grows at (load − capacity). With
+  virtual threads enabled the executor did not saturate. `@Scheduled` and
+  `@EventListener` keep "documented mechanism". The evidence lines of a `blocking`
+  finding change accordingly; detection and severity do not.
+- New test (`evidence.test.js`): measured evidence must cite a source pinned to a commit
+  with a line range; for this repository, the file and lines must exist at that commit.
+
 ## 2.0.0
 
 First npm release since 1.0.3 (2026-06-12). npm 1.0.3 was published from an

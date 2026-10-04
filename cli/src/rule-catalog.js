@@ -43,7 +43,21 @@ export const RULE_CATALOG = {
     short: 'Blocking calls detected inside asynchronous execution contexts.',
     full: 'Detects Thread.sleep(), .join(), .block()/.blockFirst()/.blockLast() and Future.get() inside methods annotated @Async, @Scheduled or @EventListener (@KafkaListener is reported as blocking-kafka). Blocking there pins a thread of the executor/scheduler pool and can exhaust it under load. Future.get() is only matched on a receiver this same file declares with a Future type (Future, CompletableFuture, ListenableFuture, ...) or on CompletableFuture.xxxAsync(...).get(); a bare .get() is not, to avoid Optional.get()/Map.get() false positives, so Futures declared in another file are not detected. Timed get(timeout, unit) is not flagged. A call under several anchors is reported once, naming all of them.',
     severities: ['critical'],
-    evidence: { kind: 'mechanism', text: 'the call holds a thread of the @Async executor / @Scheduled scheduler / event pool for its whole duration; under load the pool saturates' },
+    evidence: {
+      kind: 'measured',
+      results: [
+        {
+          lab: 'java-vibe-guard verify/blocking — @Async',
+          // Pre-registered experiment (PREREGISTRATION.md at a809b2c), results at c4e5ddd:
+          // all criteria (a)-(e) met. Capacity and queue growth only: latencies grow with
+          // the window (unbounded queue), so no absolute latency is quoted.
+          text: "on Spring Boot's default @Async executor (8 platform threads, unbounded queue), a call that holds the thread caps throughput at threads / call duration: 39.9-40.0 tasks/s with 8 threads, 79.8 with 16. Above that the queue grows at (load - capacity) and 98-99.5% of latency is queue wait; the same call without holding the thread did not queue. With virtual threads enabled (spring.threads.virtual.enabled=true) the executor did not saturate",
+          source: 'https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c4e5ddd/cli/verify/blocking/results/criteria.md#L7-L38',
+        },
+      ],
+      // Not measured: same mechanism, other pools.
+      mechanism: { scope: '@Scheduled, @EventListener', text: 'the call holds a thread of the scheduler / event pool for its whole duration; under load the pool saturates' },
+    },
   },
   'blocking-kafka': {
     short: 'Blocking calls detected inside @KafkaListener methods.',
