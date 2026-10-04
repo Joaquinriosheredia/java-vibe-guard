@@ -38,4 +38,10 @@ Thresholds from [`PREREGISTRATION.md`](../PREREGISTRATION.md) (frozen); departur
 | (h) | A's effective throughput ≤ 10 % of D's | met | 0.0 % |
 | (h) | No repetition of B, C, D or E− in a reprocessing loop | met | B 0, C 0, D 0, E- 0 |
 
+**Original wording of criterion (b)** (approved design; replaced in the pre-registration, see DEVIATIONS.md, deviation 2). Evaluated after the results, on the same raw data; it does not enter the outcome below, which follows the pre-registration.
+
+| Criterion | Check | Result | Figures |
+|---|---|---|---|
+| (b) original, deviation 2 | A: ≥ 90 % of the window's rebalances preceded, by less than 5 s, by a poll-timeout leave of a member whose poll had been open more than M; none attributed to session.timeout | met | 100.0 % (100.0 % – 100.0 %); preceded / rebalances per rep: 20/20, 18/18, 16/16, 18/18, 18/18; delay from the leave for rebalances not started by the leave itself: 50 rebalances, min 4.978 s, median 4.993 s, max 4.999 s |
+
 **Outcome:** (0) and (a)–(g) all met → measured evidence. (h) met → the text may say A enters a reprocessing loop.
