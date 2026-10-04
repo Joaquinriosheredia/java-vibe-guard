@@ -55,6 +55,12 @@ export const FIXTURE_LEDGER = {
   'virtual-threads/absent/src/main/java/demo/AsyncService.java':                        { blocking: { critical: 1 } },
   'virtual-threads/base-enabled-profile-disabled/src/main/java/demo/AsyncService.java': { blocking: { critical: 1 } },
   'virtual-threads/placeholder/src/main/java/demo/AsyncService.java':                   { blocking: { critical: 1 } },
+  // reactor-block precision (verify/reactor-block A4 and C): measured-safe .block() shapes
+  // skipped, every other call reported (see the comments in each fixture).
+  'reactor-block-precision/both/src/main/java/demo/MixedController.java':        { 'reactor-block': { critical: 1 } },
+  'reactor-block-precision/mvc-only/src/main/java/demo/MvcController.java':      { 'reactor-block': { critical: 3 } },
+  'reactor-block-precision/mvc-only/src/main/java/demo/MvcService.java':         { 'reactor-block': { critical: 1 } },
+  'reactor-block-precision/webflux/src/main/java/demo/ReactiveController.java':  { 'reactor-block': { critical: 4 } },
   // Expected to produce zero findings (listed for completeness, not required):
   // BlockingAnomalouslyLongMethodProbe, BlockingFalsePositive,
   // BlockingWindowCommentProbe, BlockingWindowMisattributionProbe (0a: their

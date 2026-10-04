@@ -322,6 +322,27 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
   assert(json.issues.length === 0, 'ReactorBlockFalsePositive.java produces 0 findings');
 }
 {
+  // Precision (verify/reactor-block variants A4 and C): only the exact measured shapes of
+  // .block() are skipped; everything else in these modules is still reported.
+  const { stdout } = run(['--json', '--rule', 'reactor-block', join(FIXTURES, 'reactor-block-precision')]);
+  const got = JSON.parse(stdout).issues.map(i => i.location).sort();
+  const want = [
+    'both/src/main/java/demo/MixedController.java:12',        // MVC + WebFlux: stack unknown
+    'mvc-only/src/main/java/demo/MvcController.java:35',      // operator after subscribeOn(parallel())
+    'mvc-only/src/main/java/demo/MvcController.java:40',      // .toFuture().get(): not measured on MVC
+    'mvc-only/src/main/java/demo/MvcController.java:45',      // .blockFirst(): not measured on MVC
+    'mvc-only/src/main/java/demo/MvcService.java:12',         // Service: callers unknown
+    'webflux/src/main/java/demo/ReactiveController.java:21',  // plain .block() on the event loop
+    'webflux/src/main/java/demo/ReactiveController.java:37',  // subscribeOn(parallel())
+    'webflux/src/main/java/demo/ReactiveController.java:43',  // publishOn after boundedElastic
+    'webflux/src/main/java/demo/ReactiveController.java:50',  // .blockFirst(): not measured on boundedElastic
+  ].sort();
+  assert(JSON.stringify(got) === JSON.stringify(want), `reactor-block precision fixtures: expected ${want.join(', ')}; got ${got.join(', ')}`);
+  for (const skipped of ['MvcController.java:22', 'MvcController.java:28', 'ReactiveController.java:26', 'ReactiveController.java:31']) {
+    assert(!got.some(l => l.endsWith(skipped)), `measured-safe shape at ${skipped} is not reported`);
+  }
+}
+{
   // Gate (a): same @Service + .block() shape as the true positive, but the
   // file never imports reactor.core.publisher — the one deliberate
   // difference from VIBE-002 (which has no import gate at all). Checked

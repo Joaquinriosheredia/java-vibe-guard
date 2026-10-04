@@ -80,6 +80,12 @@ Measured with a pre-registered experiment ([`verify/blocking-kafka`](verify/bloc
 
 The rule flags the blocking call; it does not read `max.poll.records` or `max.poll.interval.ms`, so a finding means the pattern is present, not that the threshold is crossed.
 
+`reactor-block` does not report two `.block()` shapes that the pre-registered experiment ([`verify/reactor-block`](verify/reactor-block/), variants A4 and C) measured not to stall any Reactor thread:
+- `.block()` inside `Mono`/`Flux.fromCallable` / `fromSupplier` / `fromRunnable` moved with `.subscribeOn(Schedulers.boundedElastic())`, with no `publishOn` in the statement. It blocks a `boundedElastic` thread, the pool Reactor provides for blocking. That pool still has a capacity (threads / call duration), and the experiment saturated it above that.
+- A plain `.block()` statement (no lambda, method reference, `subscribeOn` or `publishOn`) in a `@RestController` of a module whose build file declares Spring MVC and not WebFlux. It runs on the servlet container's worker.
+
+`.blockFirst()`, `.blockLast()`, `.toFuture().get()`, `@Service`/`@Component` classes and modules with both stacks are still reported: they were not measured in those shapes.
+
 When a reactive `.block()` matches both `blocking` and `reactor-block` on the same line, only `reactor-block` is reported. A call inside a method with several anchors (e.g. `@Async` + `@Scheduled`) is reported once: `Thread.sleep() detected in method annotated @Async, @Scheduled`.
 
 ---
