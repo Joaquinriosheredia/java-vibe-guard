@@ -1,0 +1,6 @@
+{"id":"A1-l50-r1","variant":"A1","lambda":50,"rep":1,"status":"OK","gen_rc":0,"app_responsive_after":"yes","app_exit":"term","downstream_exit":"term","start_utc":"17:13:21","end_utc":"17:13:43"}
+{"id":"A2-l50-r1","variant":"A2","lambda":50,"rep":1,"status":"OK","gen_rc":0,"app_responsive_after":"yes","app_exit":"term","downstream_exit":"term","start_utc":"17:13:43","end_utc":"17:14:04"}
+{"id":"A3-l50-r1","variant":"A3","lambda":50,"rep":1,"status":"OK","gen_rc":0,"app_responsive_after":"no","app_exit":"kill","downstream_exit":"term","start_utc":"17:14:04","end_utc":"17:14:48"}
+{"id":"A4-l50-r1","variant":"A4","lambda":50,"rep":1,"status":"OK","gen_rc":0,"app_responsive_after":"yes","app_exit":"term","downstream_exit":"term","start_utc":"17:14:48","end_utc":"17:15:09"}
+{"id":"B-l50-r1","variant":"B","lambda":50,"rep":1,"status":"OK","gen_rc":0,"app_responsive_after":"yes","app_exit":"term","downstream_exit":"term","start_utc":"17:15:09","end_utc":"17:15:31"}
+{"id":"C-l50-r1","variant":"C","lambda":50,"rep":1,"status":"OK","gen_rc":0,"app_responsive_after":"yes","app_exit":"term","downstream_exit":"term","start_utc":"17:15:31","end_utc":"17:15:54"}

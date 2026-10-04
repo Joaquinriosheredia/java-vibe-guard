@@ -8,6 +8,10 @@ outcome rules apply). Thresholds are copied verbatim from PREREGISTRATION.md; do
 edit them here. Committed before the first of the 90 runs; any later change is listed in
 DEVIATIONS.md.
 
+Changes after that commit (DEVIATIONS.md): the stack check per run (deviation 1) and a
+second, non-deciding evaluation of every probe criterion with the fresh-connection probes
+(deviation 2). The pre-registered keep-alive probes still decide.
+
 Usage: python3 evaluate.py [raw_dir] [out_dir]
 """
 import gzip
@@ -85,7 +89,7 @@ def run_metrics(run):
     m["ok_in_window"] = out("OK")
     m["main_p99_ms"] = pct([r[3] - r[2] for r in main], 0.99)
     m["ok_per_s"] = sum(1 for r in reqs if r[0] == "m" and r[4] == "OK" and inw(r[3])) / win_s
-    for kind, name in (("p", "ping"), ("q", "ping_parallel")):
+    for kind, name in (("p", "ping"), ("q", "ping_parallel"), ("P", "ping_fresh"), ("Q", "ping_parallel_fresh")):
         pr = [r for r in reqs if r[0] == kind and inw(r[1])]
         lat = [r[3] - r[2] for r in pr]
         m[f"{name}_p50_ms"] = pct(lat, 0.50)
@@ -118,6 +122,9 @@ def run_metrics(run):
         for c in CLASSES:
             m[f"{pool}_{c}"] = counts[c]
             m[f"{pool}_{c}_share"] = share(counts[c], total)
+
+    # Deviation 1: which server actually served (a reactive run on Tomcat is invalid).
+    m["stack"] = "tomcat" if m["tomcat_samples"] > 0 else "netty" if m["loop_samples"] > 0 else "unknown"
 
     cpus = meta.get("cpus") or os.cpu_count()
     if len(sw) >= 2:
@@ -189,8 +196,17 @@ def fmt(x, unit=""):
     return f"{x:.2f}" if isinstance(x, float) else str(x)
 
 
-def main():
-    runs, cells, reps, env = load()
+def probe_key(key, fresh):
+    """Deviation 2: the same criterion read on the fresh-connection probes."""
+    if not fresh:
+        return key
+    for name in ("ping_parallel_", "ping_"):
+        if key.startswith(name):
+            return name.rstrip("_") + "_fresh_" + key[len(name):]
+    return key
+
+
+def criteria(runs, cells, reps, fresh):
     evaluable = lambda v, l: sum(1 for r in cells.get((v, l), []) if r["status"] == "OK") >= reps
     lines, results = [], {}
 
@@ -200,14 +216,21 @@ def main():
         return bool(ok)
 
     def M(v, l, key):  # median, None when the cell is not evaluable
+        key = probe_key(key, fresh)
         return med(cells, v, l, key) if evaluable(v, l) else None
 
     ge = lambda x, t: x is not None and x >= t
     le = lambda x, t: x is not None and x <= t
     lt = lambda x, t: x is not None and x < t
 
-    lines.append("# Criteria — reactor-block (PREREGISTRATION.md)\n")
-    lines.append("Medians over repetitions unless \"every repetition\". Thresholds copied verbatim from the pre-registration.\n")
+    if fresh:
+        lines.append("# Deviation 2 — every criterion re-read on the fresh-connection probes (reported, NOT deciding)\n")
+        lines.append("Same thresholds; only the probe changes: a new HttpClient, hence a new TCP connection, per probe request. "
+                     "Added after smoke run 2 (DEVIATIONS.md, 2). The pre-registered keep-alive evaluation above decides.\n")
+    else:
+        lines.append("# Criteria — reactor-block (PREREGISTRATION.md)\n")
+        lines.append("Medians over repetitions unless \"every repetition\". Thresholds copied verbatim from the pre-registration. "
+                     "Probes: the pre-registered keep-alive probes (deciding).\n")
     lines.append("## Runs\n")
     bad = [r for r in runs if r["status"] != "OK"]
     lines.append(f"- {len(runs)} runs; status OK: {len(runs) - len(bad)}; not OK: "
@@ -219,7 +242,9 @@ def main():
     killed = [r["id"] for r in runs if r.get("app_exit") == "kill"]
     unresp = [r["id"] for r in runs if r.get("app_responsive_after") == "no"]
     lines.append(f"- App needed SIGKILL: {', '.join(killed) or 'none'}.")
-    lines.append(f"- App not answering /ping after the run: {', '.join(unresp) or 'none'}.\n")
+    lines.append(f"- App not answering /ping after the run: {', '.join(unresp) or 'none'}.")
+    wrong = [r["id"] for r in runs if r["status"] == "OK" and r["m"]["stack"] != ("tomcat" if r["variant"] == "C" else "netty")]
+    lines.append(f"- Stack check (deviation 1), runs served by the wrong server: {', '.join(wrong) or 'none'}.\n")
 
     # (0) precondition
     lines.append("## (0) Precondition\n")
@@ -379,6 +404,12 @@ def main():
                  f" (A4 Reactor criterion and its (f) {'met' if a4_pred else 'not met'}; C and its (f) {'met' if c_pred else 'not met'}).")
     lines.append(f"- (f) met for every cell: {'yes' if f_ok else 'no'}.")
 
+    return lines
+
+
+def main():
+    runs, cells, reps, env = load()
+    lines = criteria(runs, cells, reps, fresh=False) + ["", "---", ""] + criteria(runs, cells, reps, fresh=True)
     os.makedirs(OUT, exist_ok=True)
     open(os.path.join(OUT, "criteria.md"), "w").write("\n".join(lines) + "\n")
 
@@ -388,6 +419,8 @@ def main():
         ("main_p99_ms", "ms", "main p99"), ("ping_p50_ms", "ms", "/ping p50"), ("ping_p99_ms", "ms", "/ping p99"),
         ("ping_err_share", "%", "/ping err"), ("ping_parallel_p99_ms", "ms", "/ping-parallel p99"),
         ("ping_parallel_err_share", "%", "/ping-parallel err"),
+        ("ping_fresh_p50_ms", "ms", "/ping fresh p50"), ("ping_fresh_p99_ms", "ms", "/ping fresh p99"), ("ping_fresh_err_share", "%", "/ping fresh err"),
+        ("ping_parallel_fresh_p99_ms", "ms", "/ping-parallel fresh p99"), ("ping_parallel_fresh_err_share", "%", "/ping-parallel fresh err"),
         ("loop_BLOCKING_GET_share", "%", "loop BG"), ("loop_FUTURE_GET_share", "%", "loop FG"), ("loop_IDLE_share", "%", "loop idle"),
         ("parallel_BLOCKING_GET_share", "%", "parallel BG"), ("boundedElastic_BLOCKING_GET_share", "%", "bElastic BG"),
         ("tomcat_BLOCKING_GET_share", "%", "tomcat BG"),
@@ -418,10 +451,11 @@ def main():
             out.append(f"| {label} | " + " | ".join(row) + " |")
         out.append("")
     out.append("## Runs\n")
-    out.append("| run | status | app answering after | app stop | downstream stop |")
-    out.append("|---|---|---|---|---|")
+    out.append("| run | status | stack | app answering after | app stop | downstream stop |")
+    out.append("|---|---|---|---|---|---|")
     for r in runs:
-        out.append(f"| {r['id']} | {r['status']} | {r.get('app_responsive_after')} | {r.get('app_exit')} | {r.get('downstream_exit')} |")
+        stack = r["m"]["stack"] if r["status"] == "OK" else "n/a"
+        out.append(f"| {r['id']} | {r['status']} | {stack} | {r.get('app_responsive_after')} | {r.get('app_exit')} | {r.get('downstream_exit')} |")
     open(os.path.join(OUT, "summary.md"), "w").write("\n".join(out) + "\n")
     print("\n".join(lines))
 

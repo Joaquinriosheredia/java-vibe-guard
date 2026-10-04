@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-10-04T17:08:43.736Z",
+  "projectPath": "app/src/main/java",
+  "filesScanned": 12,
+  "summary": {
+    "critical": 5,
+    "major": 0,
+    "warning": 0,
+    "info": 0,
+    "reported": 5,
+    "suppressed": 0,
+    "total": 5
+  },
+  "healthy": false,
+  "issues": [
+    {
+      "severity": "critical",
+      "ruleId": "reactor-block",
+      "message": "Reactive blocking call '.block()' inside Spring bean — pins a thread under load; use reactive composition (.flatMap, .map, .then) instead",
+      "location": "com/javavibeguard/reactorblock/VariantA1Controller.java:22"
+    },
+    {
+      "severity": "critical",
+      "ruleId": "reactor-block",
+      "message": "Reactive blocking call '.block()' inside Spring bean — pins a thread under load; use reactive composition (.flatMap, .map, .then) instead",
+      "location": "com/javavibeguard/reactorblock/VariantA2Controller.java:24"
+    },
+    {
+      "severity": "critical",
+      "ruleId": "reactor-block",
+      "message": "Reactive chain '.toFuture().get()' blocks the calling thread — stay on the reactive pipeline with .flatMap() or .subscribe()",
+      "location": "com/javavibeguard/reactorblock/VariantA3Controller.java:22"
+    },
+    {
+      "severity": "critical",
+      "ruleId": "reactor-block",
+      "message": "Reactive blocking call '.block()' inside Spring bean — pins a thread under load; use reactive composition (.flatMap, .map, .then) instead",
+      "location": "com/javavibeguard/reactorblock/VariantA4Controller.java:22"
+    },
+    {
+      "severity": "critical",
+      "ruleId": "reactor-block",
+      "message": "Reactive blocking call '.block()' inside Spring bean — pins a thread under load; use reactive composition (.flatMap, .map, .then) instead",
+      "location": "com/javavibeguard/reactorblock/VariantCController.java:22"
+    }
+  ]
+}

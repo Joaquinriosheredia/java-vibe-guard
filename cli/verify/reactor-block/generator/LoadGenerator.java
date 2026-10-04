@@ -25,8 +25,13 @@ import java.util.concurrent.locks.LockSupport;
  * t0 + k / rate and starts one virtual thread per request. Main traffic and probes use two
  * separate HttpClient instances (HTTP/1.1, connect and request timeouts 10 s).
  *
+ * Fresh-connection probes (DEVIATIONS.md, 2): the same two endpoints at the same rate, each
+ * request through a new HttpClient, so a new TCP connection that the server has to accept.
+ * The pre-registered probes reuse keep-alive connections opened before the stall.
+ *
  * Writes one JSON file: t0 (epoch ms) and, per request, [kind, target, send, end, outcome,
- * status], times in epoch ms. Kinds: "m" main, "p" /ping, "q" /ping-parallel. Outcomes:
+ * status], times in epoch ms. Kinds: "m" main, "p" /ping, "q" /ping-parallel, "P" /ping on a
+ * fresh connection, "Q" /ping-parallel on a fresh connection. Outcomes:
  * OK, HTTP_500, HTTP_OTHER, TIMEOUT, CONNECT_TIMEOUT, IO_ERROR, UNFINISHED.
  *
  * Usage: LoadGenerator baseUrl mainPath lambda warmupS windowS probeRatePerEndpoint output
@@ -67,6 +72,8 @@ public class LoadGenerator {
         schedulers.add(scheduler("p", probeClient, URI.create(base + "/ping"), probeRate, 0, duration));
         // Offset by half a period so the two probes do not fire on the same instant.
         schedulers.add(scheduler("q", probeClient, URI.create(base + "/ping-parallel"), probeRate, 0.5 / probeRate, duration));
+        schedulers.add(scheduler("P", null, URI.create(base + "/ping"), probeRate, 0.25 / probeRate, duration));
+        schedulers.add(scheduler("Q", null, URI.create(base + "/ping-parallel"), probeRate, 0.75 / probeRate, duration));
         for (Thread s : schedulers) s.join();
 
         // Every request has a 10 s timeout; wait for them, with a margin.
@@ -103,7 +110,9 @@ public class LoadGenerator {
         return t;
     }
 
-    static void send(String kind, HttpClient client, URI uri, long targetNanos) {
+    /** A null client means a fresh-connection probe: a new HttpClient, closed afterwards. */
+    static void send(String kind, HttpClient shared, URI uri, long targetNanos) {
+        HttpClient client = shared != null ? shared : client();
         HttpRequest request = HttpRequest.newBuilder(uri).timeout(TIMEOUT).GET().build();
         long send = System.nanoTime();
         String outcome;
@@ -122,7 +131,11 @@ public class LoadGenerator {
             outcome = "IO_ERROR";
             Thread.currentThread().interrupt();
         }
-        RESULTS.add(new Result(kind, epochMs(targetNanos), epochMs(send), epochMs(System.nanoTime()), outcome, status));
+        long end = System.nanoTime();
+        if (shared == null) {
+            client.shutdownNow();
+        }
+        RESULTS.add(new Result(kind, epochMs(targetNanos), epochMs(send), epochMs(end), outcome, status));
         IN_FLIGHT.decrementAndGet();
     }
 
