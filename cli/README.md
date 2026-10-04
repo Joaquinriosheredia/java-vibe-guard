@@ -49,22 +49,37 @@ Requires Node.js 18+. Scanning needs nothing else; `--verify` needs more (see be
 - `get(timeout, unit)` is not flagged — a bounded wait is the recommended fix.
 - 1.0.3 flagged every `.get()`; 2.0.0 flags fewer, more precise ones.
 
+### Evidence for `blocking`
+
+Measured for **`@Async`** with a pre-registered experiment ([`verify/blocking`](verify/blocking/), design committed before any run, all criteria met; [results](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c4e5ddd/cli/verify/blocking/results/criteria.md)):
+
+- **Condition:** Spring Boot's default `@Async` executor — 8 platform threads, unbounded queue (what `@Async` gets when nothing is configured).
+- A call that holds the thread caps throughput at **threads / call duration**: 39.9–40.0 tasks/s with 8 threads, 79.8 with 16.
+- Above that, the queue grows at **(load − capacity)** and 98–99.5 % of latency is time in the queue. The same call without holding the thread did not queue.
+- **With virtual threads enabled** (`spring.threads.virtual.enabled=true`) the executor did not saturate.
+- No absolute latencies are quoted: with an unbounded queue they grow with how long the overload lasts.
+
+`@Scheduled` and `@EventListener` were not measured: documented mechanism, no benchmark of our own.
+
 When a reactive `.block()` matches both `blocking` and `reactor-block` on the same line, only `reactor-block` is reported. A call inside a method with several anchors (e.g. `@Async` + `@Scheduled`) is reported once: `Thread.sleep() detected in method annotated @Async, @Scheduled`.
 
 ---
 
 ## Example output
 
-Real output of 2.0.0 on [java-vibe-guard-demo](https://github.com/Joaquinriosheredia/java-vibe-guard-demo):
+Real output of the current source (unreleased; only the `blocking` evidence lines differ from 2.0.0) on [java-vibe-guard-demo](https://github.com/Joaquinriosheredia/java-vibe-guard-demo):
 
 ```
+
 java-vibe-guard — vibe coding detector for Java/Spring Boot
 Scanning: .  (3 files)
 
 ❌ CRITICAL: Thread.sleep() detected in @KafkaListener method → src/main/java/demo/KafkaConsumerBug.java:9
   Evidence: documented mechanism, no benchmark of our own — a blocking call delays the consumer's next poll(); past max.poll.interval.ms the group coordinator considers the consumer dead and rebalances the group (Kafka consumer docs)
 ❌ CRITICAL: blocking Future.get() detected in @Async method → src/main/java/demo/OrderService.java:22
-  Evidence: documented mechanism, no benchmark of our own — the call holds a thread of the @Async executor / @Scheduled scheduler / event pool for its whole duration; under load the pool saturates
+  Evidence (measured, java-vibe-guard verify/blocking — @Async): on Spring Boot's default @Async executor (8 platform threads, unbounded queue), a call that holds the thread caps throughput at threads / call duration: 39.9-40.0 tasks/s with 8 threads, 79.8 with 16. Above that the queue grows at (load - capacity) and 98-99.5% of latency is queue wait; the same call without holding the thread did not queue. With virtual threads enabled (spring.threads.virtual.enabled=true) the executor did not saturate
+  Source: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c4e5ddd/cli/verify/blocking/results/criteria.md#L7-L38
+  Evidence (@Scheduled, @EventListener): documented mechanism, no benchmark of our own — the call holds a thread of the scheduler / event pool for its whole duration; under load the pool saturates
 ❌ CRITICAL: Reactive blocking call '.block()' inside Spring bean — pins a thread under load; use reactive composition (.flatMap, .map, .then) instead → src/main/java/demo/ReactiveController.java:14
   Evidence: documented mechanism, no benchmark of our own — blocking pins a Reactor thread (Netty event loop or Schedulers.parallel() worker) for the whole I/O wait; with few such threads, throughput collapses under load
 ⚠️  WARNING: @KafkaListener without explicit groupId → src/main/java/demo/KafkaConsumerBug.java:7

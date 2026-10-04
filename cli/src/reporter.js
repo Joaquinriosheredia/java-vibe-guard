@@ -12,10 +12,15 @@ function formatEvidence(rule) {
   if (e.kind === 'mechanism') {
     return chalk.gray(`  Evidence: documented mechanism, no benchmark of our own — ${e.text}`);
   }
-  return e.results.flatMap(r => [
+  const lines = e.results.flatMap(r => [
     chalk.gray(`  Evidence (measured, ${r.lab}): ${r.text}`),
     chalk.gray(`  Source: ${r.source}`),
-  ]).join('\n');
+  ]);
+  // Measured for part of the rule only: the rest keeps the mechanism-only label.
+  if (e.mechanism) {
+    lines.push(chalk.gray(`  Evidence (${e.mechanism.scope}): documented mechanism, no benchmark of our own — ${e.mechanism.text}`));
+  }
+  return lines.join('\n');
 }
 
 function label(severity) {
