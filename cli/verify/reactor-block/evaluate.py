@@ -10,7 +10,8 @@ DEVIATIONS.md.
 
 Changes after that commit (DEVIATIONS.md): the stack check per run (deviation 1) and a
 second, non-deciding evaluation of every probe criterion with the fresh-connection probes
-(deviation 2). The pre-registered keep-alive probes still decide.
+(deviation 2). The pre-registered keep-alive probes still decide. After the results:
+(d1) re-read without cross-process clock alignment (deviation 4), reported, NOT deciding.
 
 Usage: python3 evaluate.py [raw_dir] [out_dir]
 """
@@ -147,6 +148,24 @@ def run_metrics(run):
                     k += 1
         m[f"ise_{pool}_ratio"] = share(k, n)
     m["exceptions_in_window"] = sum(1 for e in exceptions if inw(e["t"]))
+
+    # Deviation 4 (after the results): the app's wall clock and the generator's monotonic
+    # clock diverge on this host, so (d1) is also read over the whole run, which needs no
+    # alignment: ISEs naming a pool thread / all main requests, and the 500 share of all.
+    allmain = [r for r in reqs if r[0] == "m"]
+    m["http500_run_share"] = share(sum(1 for r in allmain if r[4] == "HTTP_500"), len(allmain))
+    for pool in ("loop", "parallel"):
+        k = 0
+        for e in exceptions:
+            t = ISE_THREAD.search(e["msg"] or "") if e["cls"] == "java.lang.IllegalStateException" else None
+            if t and POOL_RE[pool].fullmatch(t.group(1).rstrip(".,")):
+                k += 1
+        m[f"ise_{pool}_run_ratio"] = share(k, len(allmain))
+    ex_t = sorted(e["t"] for e in exceptions)
+    sends = sorted(r[2] for r in allmain)
+    # Wall-clock span of the app's exceptions minus monotonic span of the sends (ms); only
+    # meaningful when every main request raised one (A1, A2).
+    m["clock_divergence_ms"] = (ex_t[-1] - ex_t[0]) - (sends[-1] - sends[0]) if len(ex_t) == len(allmain) and ex_t else None
 
     ds_path = find(rid, "downstream.json")
     ds = []
@@ -407,9 +426,33 @@ def criteria(runs, cells, reps, fresh):
     return lines
 
 
+def clock_section(runs, cells, reps):
+    """Deviation 4: (d1) over the whole run, reported, NOT deciding."""
+    lines = ["# Deviation 4 — (d1) over the whole run, without cross-process clock alignment (reported, NOT deciding)\n",
+             "Added after the results (DEVIATIONS.md, 4). Same thresholds (≥ 99 %); the count covers every main request of the run "
+             "(warm-up and window) instead of the window, so the app's wall clock and the generator's monotonic clock need not agree. "
+             "The pre-registered (d1) above decides.\n"]
+    for v, h in HYP.items():
+        pool = h["pool"]
+        oks = []
+        for l in LAMBDAS:
+            rs = [r for r in cells.get((v, l), []) if r["status"] == "OK"]
+            s500 = statistics.median([r["m"]["http500_run_share"] for r in rs]) if len(rs) >= reps else None
+            ise = statistics.median([r["m"][f"ise_{pool}_run_ratio"] for r in rs]) if len(rs) >= reps else None
+            ok = s500 is not None and ise is not None and s500 >= 0.99 and ise >= 0.99
+            oks.append(ok)
+            per = ", ".join(f"{r['m'][f'ise_{pool}_run_ratio'] * 100:.1f} %" for r in sorted(rs, key=lambda r: r["rep"]))
+            div = ", ".join(fmt(r["m"]["clock_divergence_ms"]) for r in sorted(rs, key=lambda r: r["rep"]))
+            lines.append(f"- **(d1-run) {v} λ={l}** {'✅ met' if ok else '❌ not met'} — 500 {fmt(s500, '%')}, ISE naming a {pool} thread / main requests "
+                         f"{fmt(ise, '%')} (per rep {per}). Clock divergence per rep (ms, wall − monotonic span): {div}")
+        lines.append(f"- {v}: with (d1-run) in place of (d1), (d1) would be {'met' if all(oks) else 'not met'} at every λ.")
+    return lines
+
+
 def main():
     runs, cells, reps, env = load()
-    lines = criteria(runs, cells, reps, fresh=False) + ["", "---", ""] + criteria(runs, cells, reps, fresh=True)
+    lines = (criteria(runs, cells, reps, fresh=False) + ["", "---", ""] + criteria(runs, cells, reps, fresh=True)
+             + ["", "---", ""] + clock_section(runs, cells, reps))
     os.makedirs(OUT, exist_ok=True)
     open(os.path.join(OUT, "criteria.md"), "w").write("\n".join(lines) + "\n")
 

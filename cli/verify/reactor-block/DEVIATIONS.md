@@ -112,3 +112,43 @@ From `smoke/raw4` (λ = 400):
 
 Within the window, idle event loops are classified `IDLE`. The `OTHER` seen after the
 window are threads shutting down.
+
+## 4. Cross-process clock divergence (found after the results; reported, NOT deciding)
+
+**Pre-registered (Metrics, "Window"):** samples, exceptions and CPU use their own timestamps
+against the same interval [t₀ + 10 s, t₀ + 70 s). They are taken with each JVM's wall
+clock, while the generator's times are its own monotonic clock (`nanoTime`) anchored to
+its wall clock at t₀.
+
+**Observed (after the 90 runs, 2026-10-04, ~21:20):**
+- **A1, λ = 10:** (d1) not met, with an ISE/requests ratio of 97.0 % (582/600 in 3 of 5
+  repetitions). Yet every main request of every A1 and A2 run returned 500, and the app
+  recorded one `IllegalStateException` for each, naming a thread of the right pool:
+  700/700, 3,500/3,500 and 28,000/28,000.
+- **The shortfall is a misaligned window, not missing exceptions.** In every A1 and A2
+  run, the app's exceptions span 2.7–5.6 s less wall-clock time than the generator's sends
+  span in monotonic time (median about 3.7 s over ~70 s). When the two clocks disagree at
+  t₀ + 10 s, the window's last seconds fall after the app's last exception.
+- **The host's wall clock is stepped by WSL2's time sync.** Measured after the runs: one
+  10 s interval advanced 8.275 s by `time.time()` and 10.029 s by `time.monotonic()`.
+
+**Affected metrics:** only metrics that compare one JVM's timestamps with another's
+window:
+- the ISE count in (d1), sensitive at λ = 10, where 18 requests are 3 %;
+- the window placement of the thread samples (the classes are steady through each run, so
+  the shares are unaffected);
+- the downstream window. f2 uses the downstream's own clock for its latencies, so it is
+  unaffected.
+
+Per-request outcomes, latencies, throughput and lateness are all generator-side, on one
+clock, and are unaffected.
+
+**Added to `evaluate.py`** (after the results): (d1-run), the same ≥ 99 % thresholds over
+**every** main request of the run, which needs no alignment between clocks. The result, in
+the third section of `results/criteria.md`:
+- A1 and A2 meet it at every λ, with 100.0 % in every repetition;
+- A3 does not (0 %).
+
+**The pre-registered (d1) still decides.** A1's verdict stays "fits neither", and
+consequence 1 covers only A2's thread context (PREREGISTRATION.md, Outcome 1). Whether to
+extend the correction to the event loop on (d1-run) is for Joaquín to decide.
