@@ -10,6 +10,20 @@
   virtual threads enabled the executor did not saturate. `@Scheduled` and
   `@EventListener` keep "documented mechanism". The evidence lines of a `blocking`
   finding change accordingly; detection and severity do not.
+- **`blocking-kafka` evidence is now measured.** Pre-registered experiment
+  (`cli/verify/blocking-kafka/`, design committed before any run, all criteria met):
+  - the damage appears only when max.poll.records × time per record >
+    max.poll.interval.ms, which with the defaults (500 records, 300 s) means more than
+    600 ms per record;
+  - above that threshold, in an accelerated setup (max.poll.interval.ms lowered to
+    10 s), the group entered a reprocessing loop: 0 records/s committed, each record
+    delivered ~10 times;
+  - below it, the same blocking call caused no measured damage.
+
+  Measured on kafka-clients 3.6.2, the classic protocol with eager rebalancing, and
+  AckMode BATCH; the cooperative protocol and KIP-848 were not measured. The evidence
+  lines of a `blocking-kafka` finding change accordingly; detection and severity do
+  not.
 - New test (`evidence.test.js`): measured evidence must cite a source pinned to a commit
   with a line range; for this repository, the file and lines must exist at that commit.
 
