@@ -113,7 +113,10 @@ public class ExperimentRunner implements CommandLineRunner {
                 case "K" -> {
                     CompletableFuture<Integer> done = new CompletableFuture<>();
                     // The task "finishes" (in-flight) when Spring's future completes; end-to-end is `done`.
-                    tasks.completed(task, done).whenComplete((v, e) -> counters.finished.incrementAndGet());
+                    tasks.completed(task, done).whenComplete((v, e) -> {
+                        task.taskEndNs = System.nanoTime();
+                        counters.finished.incrementAndGet();
+                    });
                     yield done;
                 }
                 case "N" -> direct.pending(task);
@@ -155,7 +158,8 @@ public class ExperimentRunner implements CommandLineRunner {
         out.put("drained", drained);
         out.put("unfinished", windowTasks.size() - done.size());
         out.put("queueWaitMs", ms(done.stream().filter(t -> t.startNs != 0).mapToLong(t -> t.startNs - t.submitNs).toArray()));
-        out.put("executionMs", ms(done.stream().filter(t -> t.startNs != 0).mapToLong(t -> t.endNs - t.startNs).toArray()));
+        // Execution = method start → executor task end; for K that is Spring's future, not `done` (DEVIATIONS.md, 1).
+        out.put("executionMs", ms(done.stream().filter(t -> t.startNs != 0).mapToLong(t -> (t.taskEndNs != 0 ? t.taskEndNs : t.endNs) - t.startNs).toArray()));
         out.put("latencyMs", ms(done.stream().mapToLong(t -> t.endNs - t.submitNs).toArray()));
         out.put("processCpuLoad", cpu);
         out.put("gcMsInWindow", gcMs);

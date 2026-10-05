@@ -1,0 +1,7 @@
+{"id":"PN-10-r1","variant":"PN","rate":10,"rep":1,"status":"OK","rc":0,"start_utc":"10:55:06","end_utc":"10:55:27"}
+{"id":"P-60-r1","variant":"P","rate":60,"rep":1,"status":"OK","rc":0,"start_utc":"10:55:27","end_utc":"10:55:58"}
+{"id":"K-60-r1","variant":"K","rate":60,"rep":1,"status":"OK","rc":0,"start_utc":"10:55:58","end_utc":"10:56:19"}
+{"id":"N-60-r1","variant":"N","rate":60,"rep":1,"status":"OK","rc":0,"start_utc":"10:56:19","end_utc":"10:56:41"}
+{"id":"V-60-r1","variant":"V","rate":60,"rep":1,"status":"OK","rc":0,"start_utc":"10:56:41","end_utc":"10:57:02"}
+{"id":"P16-60-r1","variant":"P16","rate":60,"rep":1,"status":"OK","rc":0,"start_utc":"10:57:02","end_utc":"10:57:23"}
+{"id":"PN-60-r1","variant":"PN","rate":60,"rep":1,"status":"OK","rc":0,"start_utc":"10:57:23","end_utc":"10:58:04"}
