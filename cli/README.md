@@ -6,6 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js ≥18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
+> **2.2.0:** `reactor-block` evidence is measured. `.block()` on a Reactor thread (event loop or `Schedulers.parallel()`) fails fast with `IllegalStateException`; it does not hold the thread. `.toFuture().get()` with WebClient on the server's event loops deadlocks every request. Two `.block()` shapes measured not to stall Reactor are no longer reported. No finding becomes more severe. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#220).
+>
 > **2.1.0:** measured evidence for `blocking` (`@Async`) and `blocking-kafka`, and `blocking` under `@Async` is WARNING instead of CRITICAL when the module's base config enables virtual threads. No finding becomes more severe. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#210).
 >
 > **2.0.0 is a major release:** two CRITICAL rules run by default that 1.0.3 did not have (`reactor-block`, `kafka-send-timeout`), and `blocking` changed how it matches `.get()`. A CI that was green on 1.0.3 can turn red. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#200).
