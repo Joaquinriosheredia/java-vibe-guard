@@ -1,0 +1,3 @@
+{"id":"A1-l50-r1","variant":"A1","lambda":50,"rep":1,"status":"OK","gen_rc":0,"app_responsive_after":"yes","app_exit":"term","downstream_exit":"term","start_utc":"04:35:25","end_utc":"04:35:48"}
+{"id":"A3-l50-r1","variant":"A3","lambda":50,"rep":1,"status":"OK","gen_rc":0,"app_responsive_after":"no","app_exit":"kill","downstream_exit":"term","start_utc":"04:35:48","end_utc":"04:36:32"}
+{"id":"B-l50-r1","variant":"B","lambda":50,"rep":1,"status":"OK","gen_rc":0,"app_responsive_after":"yes","app_exit":"term","downstream_exit":"term","start_utc":"04:36:32","end_utc":"04:36:54"}

@@ -1,0 +1,41 @@
+{
+  "timestamp": "2026-10-05T04:35:25.815Z",
+  "projectPath": "app/src/main/java",
+  "filesScanned": 14,
+  "summary": {
+    "critical": 4,
+    "major": 0,
+    "warning": 0,
+    "info": 0,
+    "reported": 4,
+    "suppressed": 0,
+    "total": 4
+  },
+  "healthy": false,
+  "issues": [
+    {
+      "severity": "critical",
+      "ruleId": "reactor-block",
+      "message": "Reactive blocking call '.block()' inside Spring bean — on a Schedulers.parallel() worker it throws IllegalStateException on every call (measured); compose with .flatMap()/.then() instead, or, if the call must block, run it in Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic()) (a bounded pool: capacity = threads / call duration)",
+      "location": "com/javavibeguard/reactorblock/VariantA1Controller.java:22"
+    },
+    {
+      "severity": "critical",
+      "ruleId": "reactor-block",
+      "message": "Reactive blocking call '.block()' inside Spring bean — on a Schedulers.parallel() worker it throws IllegalStateException on every call (measured); compose with .flatMap()/.then() instead, or, if the call must block, run it in Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic()) (a bounded pool: capacity = threads / call duration)",
+      "location": "com/javavibeguard/reactorblock/VariantA2Controller.java:24"
+    },
+    {
+      "severity": "critical",
+      "ruleId": "reactor-block",
+      "message": "Reactive chain '.toFuture().get()' blocks the calling thread — stay on the reactive pipeline with .flatMap() or .subscribe()",
+      "location": "com/javavibeguard/reactorblock/VariantA3Controller.java:22"
+    },
+    {
+      "severity": "critical",
+      "ruleId": "reactor-block",
+      "message": "Reactive blocking call '.block()' inside Spring bean — on a Schedulers.parallel() worker it throws IllegalStateException on every call (measured); compose with .flatMap()/.then() instead, or, if the call must block, run it in Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic()) (a bounded pool: capacity = threads / call duration)",
+      "location": "com/javavibeguard/reactorblock/VariantCController.java:22"
+    }
+  ]
+}
