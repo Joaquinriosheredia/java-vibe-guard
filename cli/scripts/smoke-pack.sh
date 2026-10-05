@@ -89,6 +89,31 @@ if (on?.severity !== 'warning' || !on.message.includes('verify/blocking variant 
 if (profile?.severity !== 'critical') throw new Error(`virtual threads only in a profile: expected CRITICAL, got ${JSON.stringify(profile)}`);
 EOF
 
+# 2.2.0: reactor-block on the installed package, with the measured variants of
+# verify/reactor-block (web-stack.js must be in the package). WebFlux module: .block() on
+# the event loop (A1) and on a parallel worker (A2) and .toFuture().get() (A3) are reported;
+# the boundedElastic form (A4) is not. MVC-only module: the @RestController .block() (C) is not.
+RB="$CLI_DIR/verify/reactor-block/app/src/main/java/com/javavibeguard/reactorblock"
+mkdir -p rb-webflux/src/main/java/demo rb-mvc/src/main/java/demo
+printf '<project><dependencies><dependency><artifactId>spring-boot-starter-webflux</artifactId></dependency></dependencies></project>\n' > rb-webflux/pom.xml
+printf '<project><dependencies><dependency><artifactId>spring-boot-starter-web</artifactId></dependency></dependencies></project>\n' > rb-mvc/pom.xml
+cp "$RB"/VariantA1Controller.java "$RB"/VariantA2Controller.java "$RB"/VariantA3Controller.java "$RB"/VariantA4Controller.java rb-webflux/src/main/java/demo/
+cp "$RB"/VariantCController.java rb-mvc/src/main/java/demo/
+for m in rb-webflux rb-mvc; do
+  "${JVG[@]}" "$m" --rule reactor-block --format json > "$m.json" || true
+done
+node - <<'EOF'
+const fs = require('fs');
+const issues = m => JSON.parse(fs.readFileSync(`${m}.json`, 'utf8')).issues;
+const wf = issues('rb-webflux'), mvc = issues('rb-mvc');
+const at = f => wf.filter(i => i.location.startsWith(`src/main/java/demo/${f}:`));
+if (at('VariantA1Controller.java').length !== 1 || !/Netty event loop/.test(at('VariantA1Controller.java')[0].message)) throw new Error(`event-loop .block() (A1): expected 1 finding naming the event loop, got ${JSON.stringify(at('VariantA1Controller.java'))}`);
+if (at('VariantA2Controller.java').length !== 1 || !/IllegalStateException/.test(at('VariantA2Controller.java')[0].message)) throw new Error(`parallel .block() (A2): expected 1 finding, got ${JSON.stringify(at('VariantA2Controller.java'))}`);
+if (at('VariantA3Controller.java').length !== 1 || !/deadlocked/.test(at('VariantA3Controller.java')[0].message)) throw new Error(`.toFuture().get() (A3): expected 1 finding citing the deadlock, got ${JSON.stringify(at('VariantA3Controller.java'))}`);
+if (at('VariantA4Controller.java').length !== 0) throw new Error(`boundedElastic form (A4): expected no finding, got ${JSON.stringify(at('VariantA4Controller.java'))}`);
+if (mvc.length !== 0) throw new Error(`MVC-only @RestController .block() (C): expected no finding, got ${JSON.stringify(mvc)}`);
+EOF
+
 if [[ "${SMOKE_VERIFY:-0}" == "1" ]]; then
   echo "running the real --verify VIBE-001 from the installed package…"
   "${JVG[@]}" --verify VIBE-001 --no-color || fail "--verify VIBE-001 failed from the installed package"
@@ -96,4 +121,4 @@ if [[ "${SMOKE_VERIFY:-0}" == "1" ]]; then
     || fail "--verify wrote build output inside the installed package"
 fi
 
-echo "SMOKE OK: $TARBALL installed in a clean project — version, help, scan, SARIF, explain, verify registry, virtual-threads severity$([[ "${SMOKE_VERIFY:-0}" == "1" ]] && echo ', full --verify VIBE-001')"
+echo "SMOKE OK: $TARBALL installed in a clean project — version, help, scan, SARIF, explain, verify registry, virtual-threads severity, reactor-block measured shapes$([[ "${SMOKE_VERIFY:-0}" == "1" ]] && echo ', full --verify VIBE-001')"

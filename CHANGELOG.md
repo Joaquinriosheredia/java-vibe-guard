@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 2.2.0
+
+npm `2.2.0`, Action `@v2.2.0` / `@v2`. CLI only: the MCP server is unchanged, and its
+jar stays the one attached to the v2.0.0 release.
+- No finding becomes more severe, and no new finding appears.
+- `reactor-block` reports fewer findings: two `.block()` shapes measured not to stall
+  any Reactor thread.
+- Its messages and evidence now describe what was measured: `.block()` on a Reactor
+  thread fails fast; `.toFuture().get()` deadlocks.
 
 - **`reactor-block`: what `.block()` on a Reactor thread does is now measured, and it is
   not what the rule said.** Pre-registered experiment (`cli/verify/reactor-block/`, H1
@@ -37,6 +45,13 @@
   and modules with both stacks are still reported. The `.block()` message no longer
   suggests `.map` (the rule reports a blocking call inside `.map`): it suggests
   `.flatMap()`/`.then()`, or the `boundedElastic` form for a call that must block.
+- `cli/verify/blocking-kafka/results/summary.md`: a reproducibility note. The published
+  results are not affected by wall-clock steps; on a host with active steps, E+ and
+  the original (b) could come out differently.
+- The packaged-tarball smoke test also checks `reactor-block` on the installed package:
+  - `.block()` on a `parallel` worker and on the event loop is reported;
+  - `.toFuture().get()` is reported;
+  - the `boundedElastic` form and an MVC-only `@RestController` produce no finding.
 
 ## 2.1.0
 
