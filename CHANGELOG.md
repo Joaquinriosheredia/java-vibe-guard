@@ -11,6 +11,19 @@
   finding message, the rule description and its evidence say so. The event loop and
   `.toFuture().get()` keep "documented mechanism": the experiment did not meet its
   pre-registered criteria for them. Detection and severity do not change.
+- **`reactor-block` no longer reports two `.block()` shapes measured not to stall any
+  Reactor thread** (same experiment, variants A4 and C):
+  - `.block()` inside `Mono`/`Flux.fromCallable`/`fromSupplier`/`fromRunnable` moved with
+    `.subscribeOn(Schedulers.boundedElastic())`, with no `publishOn` in the statement. It
+    blocks a bounded pool: capacity = threads / call duration, measured saturating above
+    it;
+  - a plain `.block()` statement in a `@RestController` of a module whose build file
+    declares Spring MVC and not WebFlux.
+
+  `.blockFirst()`, `.blockLast()`, `.toFuture().get()`, `@Service`/`@Component` classes
+  and modules with both stacks are still reported. The `.block()` message no longer
+  suggests `.map` (the rule reports a blocking call inside `.map`): it suggests
+  `.flatMap()`/`.then()`, or the `boundedElastic` form for a call that must block.
 
 ## 2.1.0
 

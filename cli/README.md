@@ -80,6 +80,12 @@ Measured with a pre-registered experiment ([`verify/blocking-kafka`](verify/bloc
 
 The rule flags the blocking call; it does not read `max.poll.records` or `max.poll.interval.ms`, so a finding means the pattern is present, not that the threshold is crossed.
 
+`reactor-block` does not report two `.block()` shapes that the pre-registered experiment ([`verify/reactor-block`](verify/reactor-block/), variants A4 and C) measured not to stall any Reactor thread:
+- `.block()` inside `Mono`/`Flux.fromCallable` / `fromSupplier` / `fromRunnable` moved with `.subscribeOn(Schedulers.boundedElastic())`, with no `publishOn` in the statement. It blocks a `boundedElastic` thread, the pool Reactor provides for blocking. That pool still has a capacity (threads / call duration), and the experiment saturated it above that.
+- A plain `.block()` statement (no lambda, method reference, `subscribeOn` or `publishOn`) in a `@RestController` of a module whose build file declares Spring MVC and not WebFlux. It runs on the servlet container's worker.
+
+`.blockFirst()`, `.blockLast()`, `.toFuture().get()`, `@Service`/`@Component` classes and modules with both stacks are still reported: they were not measured in those shapes.
+
 When a reactive `.block()` matches both `blocking` and `reactor-block` on the same line, only `reactor-block` is reported. A call inside a method with several anchors (e.g. `@Async` + `@Scheduled`) is reported once: `Thread.sleep() detected in method annotated @Async, @Scheduled`.
 
 ---
@@ -100,7 +106,7 @@ Scanning: .  (3 files)
   Evidence (measured, java-vibe-guard verify/blocking — @Async): on Spring Boot's default @Async executor (8 platform threads, unbounded queue), a call that holds the thread caps throughput at threads / call duration: 39.9-40.0 tasks/s with 8 threads, 79.8 with 16. Above that the queue grows at (load - capacity) and 98-99.5% of latency is queue wait; the same call without holding the thread did not queue. With virtual threads enabled (spring.threads.virtual.enabled=true) the executor did not saturate
   Source: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c4e5ddd/cli/verify/blocking/results/criteria.md#L7-L38
   Evidence (@Scheduled, @EventListener): documented mechanism, no benchmark of our own — the call holds a thread of the scheduler / event pool for its whole duration; under load the pool saturates
-❌ CRITICAL: Reactive blocking call '.block()' inside Spring bean — on a Schedulers.parallel() worker it throws IllegalStateException on every call (measured); use reactive composition (.flatMap, .map, .then) instead → src/main/java/demo/ReactiveController.java:14
+❌ CRITICAL: Reactive blocking call '.block()' inside Spring bean — on a Schedulers.parallel() worker it throws IllegalStateException on every call (measured); compose with .flatMap()/.then() instead, or, if the call must block, run it in Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic()) (a bounded pool: capacity = threads / call duration) → src/main/java/demo/ReactiveController.java:14
   Evidence (measured, java-vibe-guard verify/reactor-block — .block() on Schedulers.parallel()): a .block() on a Schedulers.parallel() worker (the README "Found in the Wild" Finding 2 shape: .block() inside .map() after subscribeOn(Schedulers.parallel())) does not hold the thread: Reactor throws IllegalStateException ("block()/blockFirst()/blockLast() are blocking, which is not supported in thread parallel-N") on every call, so 100% of the requests through that path failed with HTTP 500 at every load measured (10, 50 and 400 requests/s), not only under load; the workers were not held (0-0.9% of their samples inside blockingGet) and other work on them was not delayed. Measured on Spring Boot 3.2.5, reactor-core 3.6.5, reactor-netty 1.1.18
   Source: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c934bd7/cli/verify/reactor-block/results/criteria.md#L32-L46
   Evidence (.block() on the Netty event loop, .toFuture().get()): documented mechanism, no benchmark of our own — blocking pins a Reactor thread (the Netty event loop) for the whole I/O wait; with few such threads, throughput collapses under load

@@ -64,7 +64,7 @@ function parseYaml(text) {
   return docs;
 }
 
-function moduleRoot(javaFile) {
+export function moduleRoot(javaFile) {
   for (let dir = dirname(javaFile); ; dir = dirname(dir)) {
     if (MODULE_MARKERS.some(marker => existsSync(join(dir, marker)))) return dir;
     if (dirname(dir) === dir) return null;

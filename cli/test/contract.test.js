@@ -322,6 +322,61 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
   assert(json.issues.length === 0, 'ReactorBlockFalsePositive.java produces 0 findings');
 }
 {
+  // Precision (verify/reactor-block variants A4 and C): only the exact measured shapes of
+  // .block() are skipped; everything else in these modules is still reported.
+  const { stdout } = run(['--json', '--rule', 'reactor-block', join(FIXTURES, 'reactor-block-precision')]);
+  const got = JSON.parse(stdout).issues.map(i => i.location).sort();
+  const want = [
+    'both/src/main/java/demo/MixedController.java:12',        // MVC + WebFlux: stack unknown
+    'mvc-only/src/main/java/demo/MvcController.java:35',      // operator after subscribeOn(parallel())
+    'mvc-only/src/main/java/demo/MvcController.java:40',      // .toFuture().get(): not measured on MVC
+    'mvc-only/src/main/java/demo/MvcController.java:45',      // .blockFirst(): not measured on MVC
+    'mvc-only/src/main/java/demo/MvcService.java:12',         // Service: callers unknown
+    'webflux/src/main/java/demo/ReactiveController.java:21',  // plain .block() on the event loop
+    'webflux/src/main/java/demo/ReactiveController.java:37',  // subscribeOn(parallel())
+    'webflux/src/main/java/demo/ReactiveController.java:43',  // publishOn after boundedElastic
+    'webflux/src/main/java/demo/ReactiveController.java:50',  // .blockFirst(): not measured on boundedElastic
+  ].sort();
+  assert(JSON.stringify(got) === JSON.stringify(want), `reactor-block precision fixtures: expected ${want.join(', ')}; got ${got.join(', ')}`);
+  for (const skipped of ['MvcController.java:22', 'MvcController.java:28', 'ReactiveController.java:26', 'ReactiveController.java:31']) {
+    assert(!got.some(l => l.endsWith(skipped)), `measured-safe shape at ${skipped} is not reported`);
+  }
+}
+{
+  // The fixes the reactor-block messages recommend must not be flagged by reactor-block
+  // itself (decision 2026-10-05): .flatMap()/.then() composition, the boundedElastic
+  // escape hatch for a call that must block, and .subscribe().
+  const lines = [
+    'package demo;',
+    'import org.springframework.web.bind.annotation.RestController;',
+    'import reactor.core.publisher.Mono;',
+    'import reactor.core.scheduler.Schedulers;',
+    '@RestController',
+    'public class RecommendedFixes {',
+    '    private Client client;',
+    '    public Mono<String> composed() {',
+    '        return client.call().flatMap(x -> client.other(x));',
+    '    }',
+    '    public Mono<Void> then() {',
+    '        return client.call().then();',
+    '    }',
+    '    public Mono<String> mustBlock() {',
+    '        return Mono.fromCallable(() -> client.call().block()).subscribeOn(Schedulers.boundedElastic());',
+    '    }',
+    '    public void fireAndForget() {',
+    '        client.call().subscribe();',
+    '    }',
+    '    interface Client { Mono<String> call(); Mono<String> other(String s); }',
+    '}',
+  ];
+  const findings = checkReactorBlock([{ filePath: '/nonexistent/RecommendedFixes.java', relativePath: 'RecommendedFixes.java', lines }]);
+  assert(findings.length === 0, `the fixes recommended by reactor-block's messages are not flagged by it: got ${findings.map(f => f.location).join(', ')}`);
+  const messages = [...new Set(checkReactorBlock([{ filePath: '/nonexistent/X.java', relativePath: 'X.java', lines: [
+    'import reactor.core.publisher.Mono;', '@RestController', 'public class X {', '    public String a(Mono<String> m) throws Exception {',
+    '        String s = m.block();', '        return m.toFuture().get();', '    }', '}'] }]).map(f => f.message))];
+  assert(messages.length === 2 && messages.every(m => !/\.map\b/.test(m)), `no reactor-block message recommends .map (flagged when it wraps a blocking call): ${messages.join(' | ')}`);
+}
+{
   // Gate (a): same @Service + .block() shape as the true positive, but the
   // file never imports reactor.core.publisher — the one deliberate
   // difference from VIBE-002 (which has no import gate at all). Checked
