@@ -33,11 +33,13 @@
 //   - reactor-block: always 'critical' (reactor-block.js, two findings.push
 //     call sites, both 'critical'). New rule — faithful CLI port of the MCP
 //     server's VIBE-002 (ReactorBlockingCallRule.java), plus a Reactor-import
-//     file gate the Java original doesn't have. Evidence: README.md "Found
-//     in the Wild" Finding 2, FileContentSearchService.java
+//     file gate the Java original doesn't have. Motivating case: README.md
+//     "Found in the Wild" Finding 2, FileContentSearchService.java
 //     (eugenp/tutorials), .block() inside .map() on a Schedulers.parallel()
 //     worker — a shape blocking.js does not detect (no @Scheduled/@Async/
-//     @EventListener/@KafkaListener annotation present).
+//     @EventListener/@KafkaListener annotation present). Measured in
+//     verify/reactor-block: that shape throws IllegalStateException on every
+//     call instead of holding the worker.
 //   - transactions: 'critical' (transactions.js:35) and 'major'
 //     (transactions.js:23) — the only mixed-severity rule id today.
 export const RULE_CATALOG = {
@@ -122,9 +124,24 @@ export const RULE_CATALOG = {
   },
   'reactor-block': {
     short: 'Reactive blocking call (.block()/.blockFirst()/.blockLast()/.toFuture().get()) inside a Spring bean.',
-    full: 'Detects .block(), .blockFirst(), .blockLast(), or .toFuture().get() inside a class annotated @RestController, @Service, or @Component, in a file that imports reactor.core.publisher — the CLI port of the MCP server\'s VIBE-002 (ReactorBlockingCallRule). Excludes @Test, @PostConstruct, and main() methods. Blocking a Reactor pipeline pins the calling thread (e.g. a Schedulers.parallel() worker or the Netty event loop) for the full I/O duration, causing throughput collapse under load — see README "Found in the Wild" Finding 2 (FileContentSearchService.java, eugenp/tutorials).',
+    full: 'Detects .block(), .blockFirst(), .blockLast(), or .toFuture().get() inside a class annotated @RestController, @Service, or @Component, in a file that imports reactor.core.publisher — the CLI port of the MCP server\'s VIBE-002 (ReactorBlockingCallRule). Excludes @Test, @PostConstruct, and main() methods. Measured for .block() on a Schedulers.parallel() worker (README "Found in the Wild" Finding 2 shape, FileContentSearchService.java, eugenp/tutorials): it does not pin the worker; Reactor throws IllegalStateException on every call, so every request through that path fails (HTTP 500) at any load, as soon as the path runs (tests that run it fail too). On the Netty event loop, and for .toFuture().get(), the stated mechanism (the call pins the thread for the full I/O duration) is documented, not measured: the pre-registered experiment did not meet its criteria for those two (cli/verify/reactor-block).',
     severities: ['critical'],
-    evidence: { kind: 'mechanism', text: 'blocking pins a Reactor thread (Netty event loop or Schedulers.parallel() worker) for the whole I/O wait; with few such threads, throughput collapses under load' },
+    evidence: {
+      kind: 'measured',
+      results: [
+        {
+          lab: 'java-vibe-guard verify/reactor-block — .block() on Schedulers.parallel()',
+          // Pre-registered experiment (PREREGISTRATION.md at 51fde79), results at c934bd7:
+          // variant A2 met H2 (criterion (d) at every load), (0), (e)-B and (f) met. A1 (event
+          // loop) and A3 (.toFuture().get()) fit neither hypothesis as pre-registered, so they
+          // keep the documented mechanism below (DEVIATIONS.md 4 for A1).
+          text: 'a .block() on a Schedulers.parallel() worker (the README "Found in the Wild" Finding 2 shape: .block() inside .map() after subscribeOn(Schedulers.parallel())) does not hold the thread: Reactor throws IllegalStateException ("block()/blockFirst()/blockLast() are blocking, which is not supported in thread parallel-N") on every call, so 100% of the requests through that path failed with HTTP 500 at every load measured (10, 50 and 400 requests/s), not only under load; the workers were not held (0-0.9% of their samples inside blockingGet) and other work on them was not delayed. Measured on Spring Boot 3.2.5, reactor-core 3.6.5, reactor-netty 1.1.18',
+          source: 'https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c934bd7/cli/verify/reactor-block/results/criteria.md#L32-L46',
+        },
+      ],
+      // Not measured as pre-registered: the event loop and .toFuture().get().
+      mechanism: { scope: '.block() on the Netty event loop, .toFuture().get()', text: 'blocking pins a Reactor thread (the Netty event loop) for the whole I/O wait; with few such threads, throughput collapses under load' },
+    },
   },
   transactions: {
     short: '@Transactional placed on a Controller method, or combined with @Async.',

@@ -82,7 +82,7 @@ Each rule's evidence is graded with the same criterion as the CLI output: it cou
 | Rule | Evidence |
 |------|----------|
 | VIBE-001 `TransactionalAsyncRule` | Reproduced — `--verify VIBE-001` |
-| VIBE-002 `ReactorBlockingCallRule` | Documented mechanism, no benchmark of our own |
+| VIBE-002 `ReactorBlockingCallRule` | Measured for `.block()` on a `Schedulers.parallel()` worker (fails fast, see below); documented mechanism for the event loop and `.toFuture().get()` |
 | VIBE-003 `JpaNPlusOneRule` | Documented mechanism, no benchmark of our own |
 | VIBE-004 `VirtualThreadsMisuseRule` | Documented mechanism, no benchmark of our own |
 | VIBE-005 `ConnectionPoolStarvationRule` | Reproduced — `--verify VIBE-001` (same mechanism) |
@@ -101,9 +101,11 @@ Each rule's evidence is graded with the same criterion as the CLI output: it cou
 
 ### VIBE-002 — `ReactorBlockingCallRule`
 
-**Detects:** `.block()` / `.blockFirst()` / `.toFuture().get()` in a reactive `@RestController` or `@Service` — pins a thread from `Schedulers.parallel()` (fixed-size, CPU-core-count pool) for the full duration of the I/O operation, which can stall all reactive pipeline scheduling.
+**Detects:** `.block()` / `.blockFirst()` / `.toFuture().get()` in a reactive `@RestController` or `@Service`.
 
-**Evidence:** Documented mechanism, no benchmark of our own. Project Reactor documents that blocking calls on non-blocking schedulers stall them; no Java-Production-Labs lab covers Reactor, and there is no confirmed real-world case.
+**Evidence:** measured by the CLI's pre-registered `reactor-block` experiment ([`cli/verify/reactor-block/`](cli/verify/reactor-block/), [criteria](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c934bd7/cli/verify/reactor-block/results/criteria.md#L32-L46)) for `.block()` on a `Schedulers.parallel()` worker: it does **not** pin the worker. Reactor throws `IllegalStateException` ("block()/blockFirst()/blockLast() are blocking, which is not supported in thread parallel-N") on every call, so 100 % of the requests through that path failed with HTTP 500 at every load measured, not only under load. It is still a defect, of a different kind: it fails as soon as the path runs, tests included. Measured on Spring Boot 3.2.5, reactor-core 3.6.5 and reactor-netty 1.1.18.
+
+On the Netty event loop and for `.toFuture().get()`, the experiment did not meet its pre-registered criteria, so the stated mechanism (the call pins the thread for the whole I/O wait) stays documented, not measured; the results are published in the same directory.
 
 ---
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **`reactor-block`: what `.block()` on a `Schedulers.parallel()` worker does is now
+  measured, and it is not what the rule said.** Pre-registered experiment
+  (`cli/verify/reactor-block/`, H1 "holds the thread" against H2 "fails fast"): on a
+  `parallel` worker (the README "Found in the Wild" Finding 2 shape), `.block()` does
+  not hold the worker. Reactor throws `IllegalStateException` on every call, and 100 %
+  of the requests through that path failed with HTTP 500 at every load measured. The
+  finding message, the rule description and its evidence say so. The event loop and
+  `.toFuture().get()` keep "documented mechanism": the experiment did not meet its
+  pre-registered criteria for them. Detection and severity do not change.
+
 ## 2.1.0
 
 npm `2.1.0`, Action `@v2.1.0` / `@v2`. CLI only: the MCP server is unchanged, and its

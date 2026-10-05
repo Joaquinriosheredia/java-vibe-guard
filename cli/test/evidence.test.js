@@ -13,7 +13,10 @@
  * capacity figures, virtual threads, no absolute latencies, and @Scheduled /
  * @EventListener kept as documented mechanism. And for `blocking-kafka` (2026-10-04):
  * the threshold in general form with the defaults' equivalent, the reprocessing loop
- * above it, no measured damage below it, and the limits (versions and protocol).
+ * above it, no measured damage below it, and the limits (versions and protocol). And for
+ * `reactor-block` (2026-10-04): .block() on a Schedulers.parallel() worker fails fast with
+ * IllegalStateException (measured, H2), not "pins the thread"; the event loop and
+ * .toFuture().get() stay documented mechanism (they fit neither pre-registered hypothesis).
  *
  * Run: node test/evidence.test.js
  */
@@ -120,6 +123,26 @@ test('states the limits: client version, protocol, cooperative and KIP-848 not m
     && /cooperative protocol, KIP-848 and AckMode RECORD were not measured/.test(bkText), bkText));
 test('cites the pre-registered results at a6f32ef', () =>
   assert(bk.results[0].source.includes('/blob/a6f32ef/cli/verify/blocking-kafka/results/criteria.md'), bk.results[0].source));
+
+console.log('\nreactor-block: wording decided on 2026-10-04 (pre-registered H2 for Schedulers.parallel())');
+const rb = RULE_CATALOG['reactor-block'];
+const rbText = (rb.evidence.results ?? []).map(r => r.text).join(' ');
+test('is measured, one result, for .block() on Schedulers.parallel()', () =>
+  assert(rb.evidence.kind === 'measured' && rb.evidence.results.length === 1 && /Schedulers\.parallel\(\)/.test(rb.evidence.results[0].lab), JSON.stringify(rb.evidence)));
+test('says it does not hold the thread and throws IllegalStateException on every call', () =>
+  assert(/does not hold the thread/.test(rbText) && /IllegalStateException/.test(rbText) && /on every call/.test(rbText), rbText));
+test('says 100% of affected requests failed with HTTP 500 at every load measured', () =>
+  assert(/100% of the requests through that path failed with HTTP 500 at every load measured/.test(rbText), rbText));
+test('states the versions measured', () =>
+  assert(/Spring Boot 3\.2\.5, reactor-core 3\.6\.5, reactor-netty 1\.1\.18/.test(rbText), rbText));
+test('quotes no absolute latency', () => assert(!/\d+(\.\d+)?\s*(ms|s)\b/.test(rbText), rbText));
+test('cites the pre-registered results at c934bd7', () =>
+  assert(rb.evidence.results[0].source.includes('/blob/c934bd7/cli/verify/reactor-block/results/criteria.md'), rb.evidence.results[0].source));
+test('the event loop and .toFuture().get() stay documented mechanism, without parallel workers', () =>
+  assert(rb.evidence.mechanism?.scope === '.block() on the Netty event loop, .toFuture().get()' && !/parallel/.test(rb.evidence.mechanism.text)
+    && !/\d/.test(rb.evidence.mechanism.text), JSON.stringify(rb.evidence.mechanism)));
+test('the rule description no longer says it pins a Schedulers.parallel() worker', () =>
+  assert(!/pins the calling thread \(e\.g\. a Schedulers\.parallel\(\) worker/.test(rb.full) && /it does not pin the worker/.test(rb.full), rb.full));
 
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`📊 Results: ${passed} passed, ${failed} failed`);
