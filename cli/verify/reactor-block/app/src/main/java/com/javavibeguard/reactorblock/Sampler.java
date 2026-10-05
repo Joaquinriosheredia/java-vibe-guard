@@ -46,7 +46,15 @@ public class Sampler {
         POOLS.put("tomcat", Pattern.compile("http-nio-\\d+-exec-\\d+"));
     }
 
-    record ExceptionEvent(long t, String cls, String msg, String thread) {}
+    record ExceptionEvent(long t, long nano, String cls, String msg, String thread) {}
+
+    /** Replication, instrument change 3: nanoTime of the first main-request arrival (0 = none yet). */
+    private final java.util.concurrent.atomic.AtomicLong firstMainNano = new java.util.concurrent.atomic.AtomicLong();
+    private volatile boolean firstMainWritten;
+
+    void mainArrival() {
+        firstMainNano.compareAndSet(0, System.nanoTime());
+    }
 
     private final ConcurrentLinkedQueue<ExceptionEvent> exceptions = new ConcurrentLinkedQueue<>();
     private final ObjectMapper json = new ObjectMapper();
@@ -60,7 +68,7 @@ public class Sampler {
     }
 
     void exception(Throwable t, String thread) {
-        exceptions.add(new ExceptionEvent(System.currentTimeMillis(), t.getClass().getName(), String.valueOf(t.getMessage()), thread));
+        exceptions.add(new ExceptionEvent(System.currentTimeMillis(), System.nanoTime(), t.getClass().getName(), String.valueOf(t.getMessage()), thread));
     }
 
     @PostConstruct
@@ -94,11 +102,20 @@ public class Sampler {
                 }
                 next += TICK_MS;
                 write(out, sample(threads, os));
+                long first = firstMainNano.get();
+                if (first != 0 && !firstMainWritten) {
+                    Map<String, Object> f = new LinkedHashMap<>();
+                    f.put("type", "first_main");
+                    f.put("nano", first);
+                    write(out, f);
+                    firstMainWritten = true;
+                }
                 ExceptionEvent e;
                 while ((e = exceptions.poll()) != null) {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("type", "exception");
                     m.put("t", e.t());
+                    m.put("nano", e.nano());
                     m.put("cls", e.cls());
                     m.put("msg", e.msg());
                     m.put("thread", e.thread());
@@ -113,6 +130,7 @@ public class Sampler {
 
     private Map<String, Object> sample(ThreadMXBean threads, com.sun.management.OperatingSystemMXBean os) {
         long t = System.currentTimeMillis();
+        long nano = System.nanoTime();
         Map<String, Map<String, Integer>> pools = new LinkedHashMap<>();
         POOLS.keySet().forEach(p -> pools.put(p, new TreeMap<>()));
         Map<String, Long> loopCpu = new TreeMap<>();
@@ -131,6 +149,7 @@ public class Sampler {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("type", "sample");
         m.put("t", t);
+        m.put("nano", nano);
         m.put("pools", pools);
         m.put("loopCpuNs", loopCpu);
         m.put("procCpuNs", os.getProcessCpuTime());
