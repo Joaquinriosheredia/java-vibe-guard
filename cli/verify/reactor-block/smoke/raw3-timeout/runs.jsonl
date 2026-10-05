@@ -1,0 +1,2 @@
+{"id":"B-l10-r1","variant":"B","lambda":10,"rep":1,"status":"TIMEOUT","gen_rc":124,"app_responsive_after":"yes","app_exit":"term","downstream_exit":"term","start_utc":"17:18:16","end_utc":"17:18:34"}
+{"id":"A3-l10-r1","variant":"A3","lambda":10,"rep":1,"status":"TIMEOUT","gen_rc":124,"app_responsive_after":"yes","app_exit":"kill","downstream_exit":"term","start_utc":"17:18:34","end_utc":"17:19:03"}
