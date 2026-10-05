@@ -30,7 +30,9 @@ import java.util.concurrent.locks.LockSupport;
  * The pre-registered probes reuse keep-alive connections opened before the stall.
  *
  * Writes one JSON file: t0 (epoch ms) and, per request, [kind, target, send, end, outcome,
- * status], times in epoch ms. Kinds: "m" main, "p" /ping, "q" /ping-parallel, "P" /ping on a
+ * status, class], times in epoch ms. class (replication, instrument change 2) classifies an
+ * HTTP 500 by its body: ISE_LOOP, ISE_PARALLEL or OTHER_500; "-" otherwise.
+ * Kinds: "m" main, "p" /ping, "q" /ping-parallel, "P" /ping on a
  * fresh connection, "Q" /ping-parallel on a fresh connection. Outcomes:
  * OK, HTTP_500, HTTP_OTHER, TIMEOUT, CONNECT_TIMEOUT, IO_ERROR, UNFINISHED.
  *
@@ -40,7 +42,7 @@ public class LoadGenerator {
 
     static final Duration TIMEOUT = Duration.ofSeconds(10);
 
-    record Result(String kind, double target, double send, double end, String outcome, int status) {}
+    record Result(String kind, double target, double send, double end, String outcome, int status, String cls) {}
 
     static long t0Nanos;
     static long t0Millis;
@@ -117,10 +119,17 @@ public class LoadGenerator {
         long send = System.nanoTime();
         String outcome;
         int status = 0;
+        String cls = "-";
         try {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             status = response.statusCode();
             outcome = status == 200 ? "OK" : status == 500 ? "HTTP_500" : "HTTP_OTHER";
+            if (status == 500) {
+                String body = response.body();
+                boolean ise = body.contains("IllegalStateException");
+                cls = ise && body.contains("not supported in thread reactor-http-") ? "ISE_LOOP"
+                        : ise && body.contains("not supported in thread parallel-") ? "ISE_PARALLEL" : "OTHER_500";
+            }
         } catch (HttpConnectTimeoutException e) {
             outcome = "CONNECT_TIMEOUT";
         } catch (HttpTimeoutException e) {
@@ -135,7 +144,7 @@ public class LoadGenerator {
         if (shared == null) {
             client.shutdownNow();
         }
-        RESULTS.add(new Result(kind, epochMs(targetNanos), epochMs(send), epochMs(end), outcome, status));
+        RESULTS.add(new Result(kind, epochMs(targetNanos), epochMs(send), epochMs(end), outcome, status, cls));
         IN_FLIGHT.decrementAndGet();
     }
 
@@ -148,7 +157,7 @@ public class LoadGenerator {
             for (Result r : RESULTS) {
                 if (!first) out.print(',');
                 first = false;
-                out.printf(Locale.ROOT, "[\"%s\",%.3f,%.3f,%.3f,\"%s\",%d]", r.kind(), r.target(), r.send(), r.end(), r.outcome(), r.status());
+                out.printf(Locale.ROOT, "[\"%s\",%.3f,%.3f,%.3f,\"%s\",%d,\"%s\"]", r.kind(), r.target(), r.send(), r.end(), r.outcome(), r.status(), r.cls());
             }
             out.println("]}");
         }

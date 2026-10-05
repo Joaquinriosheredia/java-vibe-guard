@@ -8,7 +8,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
  * Metric 2: every exception that reaches a handler, on either stack, is recorded with its
- * class, message and the thread it surfaced on, then answered with HTTP 500.
+ * class, message and the thread it surfaced on, then answered with HTTP 500. The body carries
+ * the class and message (replication, instrument change 1), so the generator alone can tell
+ * which thread Reactor named.
  */
 @RestControllerAdvice
 @Profile("!downstream")
@@ -23,6 +25,6 @@ public class ExceptionRecorder {
     @ExceptionHandler(Throwable.class)
     public ResponseEntity<String> handle(Throwable t) {
         sampler.exception(t, Thread.currentThread().getName());
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(t.getClass().getName());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(t.getClass().getName() + ": " + t.getMessage());
     }
 }
