@@ -183,7 +183,7 @@ export function checkReactorBlock(fileContexts) {
         findings.push({
           severity: 'critical',
           rule: 'reactor-block',
-          message: "Reactive chain '.toFuture().get()' blocks the calling thread — stay on the reactive pipeline with .flatMap() or .subscribe()",
+          message: "Reactive chain '.toFuture().get()' blocks the calling thread — in a WebFlux handler with WebClient on the server's event loops every such request deadlocked (measured); stay on the reactive pipeline with .flatMap() or .subscribe()",
           location: `${relativePath}:${i + 1}`,
         });
       }

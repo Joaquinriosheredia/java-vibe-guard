@@ -1154,12 +1154,13 @@ console.log('\n📋 Test 18b: Future.get() on Future-typed receivers; .block() r
     assert(/Source: https:\/\/github\.com\/Joaquinriosheredia\/java-vibe-guard\/blob\/a6f32ef\/cli\/verify\/blocking-kafka\/results\/criteria\.md#L7-L47/.test(bkEvidence), 'blocking-kafka: source pinned to the results commit');
     // reactor-block: measured for Schedulers.parallel() (verify/reactor-block, results pinned to c934bd7);
     // the event loop and .toFuture().get() stay documented mechanism.
-    const rbEvidence = linesAfter('Reactive blocking call', 5);
+    const rbEvidence = linesAfter('Reactive blocking call', 6);
     assert(rbEvidence.includes('Evidence (measured, java-vibe-guard verify/reactor-block — .block() on Schedulers.parallel()): a .block() on a Schedulers.parallel() worker'), 'reactor-block: measured evidence for parallel workers');
     assert(/Source: https:\/\/github\.com\/Joaquinriosheredia\/java-vibe-guard\/blob\/c934bd7\/cli\/verify\/reactor-block\/results\/criteria\.md#L32-L46/.test(rbEvidence), 'reactor-block: source pinned to the results commit');
     assert(rbEvidence.includes('Evidence (measured, java-vibe-guard verify/reactor-block replication — .block() on the Netty event loop): a .block() on the Netty event loop'), 'reactor-block: measured evidence for the event loop');
     assert(/Source: https:\/\/github\.com\/Joaquinriosheredia\/java-vibe-guard\/blob\/1052498\/cli\/verify\/reactor-block\/replication\/results\/criteria\.md#L15-L25/.test(rbEvidence), 'reactor-block: event-loop source pinned to the replication results');
-    assert(rbEvidence.includes('Evidence (.toFuture().get()): documented mechanism, no benchmark of our own'), 'reactor-block: .toFuture().get() stays documented mechanism');
+    assert(rbEvidence.includes('Evidence (measured, java-vibe-guard verify/reactor-block replication — .toFuture().get() on the Netty event loop): a .toFuture().get() in a WebFlux handler'), 'reactor-block: measured evidence for .toFuture().get()');
+    assert(!rbEvidence.includes('documented mechanism'), 'reactor-block: no documented-mechanism line left');
     const sources = text.split('\n').filter(l => l.trim().startsWith('Source: '));
     assert(sources.some(l => /Java-Production-Labs\/blob\/727f42c\/05_saga_pattern\/benchmark\/results\/summary\.md#L53-L67/.test(l)), 'kafka-send-timeout cites Lab 05 results pinned to the result commit');
     assert(sources.some(l => /Java-Production-Labs\/blob\/3e60592\/08_kafka_streams\/benchmark\/results\/summary\.md#L64-L86/.test(l)), 'kafka-send-timeout cites Lab 08 results pinned to the result commit');

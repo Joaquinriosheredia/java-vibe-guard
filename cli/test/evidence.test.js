@@ -127,8 +127,8 @@ test('cites the pre-registered results at a6f32ef', () =>
 console.log('\nreactor-block: wording decided on 2026-10-04 (pre-registered H2 for Schedulers.parallel())');
 const rb = RULE_CATALOG['reactor-block'];
 const rbText = (rb.evidence.results ?? []).map(r => r.text).join(' ');
-test('is measured, two results: .block() on Schedulers.parallel() and on the Netty event loop', () =>
-  assert(rb.evidence.kind === 'measured' && rb.evidence.results.length === 2 && /Schedulers\.parallel\(\)/.test(rb.evidence.results[0].lab)
+test('is measured, three results: .block() on Schedulers.parallel(), on the Netty event loop, and .toFuture().get()', () =>
+  assert(rb.evidence.kind === 'measured' && rb.evidence.results.length === 3 && /Schedulers\.parallel\(\)/.test(rb.evidence.results[0].lab)
     && /Netty event loop/.test(rb.evidence.results[1].lab), JSON.stringify(rb.evidence)));
 test('event loop: cites the pre-registered replication at 1052498, generator-side count', () =>
   assert(rb.evidence.results[1].source.includes('/blob/1052498/cli/verify/reactor-block/replication/results/criteria.md#L15-L25')
@@ -142,9 +142,11 @@ test('states the versions measured', () =>
 test('quotes no absolute latency', () => assert(!/\d+(\.\d+)?\s*(ms|s)\b/.test(rbText), rbText));
 test('cites the pre-registered results at c934bd7', () =>
   assert(rb.evidence.results[0].source.includes('/blob/c934bd7/cli/verify/reactor-block/results/criteria.md'), rb.evidence.results[0].source));
-test('.toFuture().get() stays documented mechanism', () =>
-  assert(rb.evidence.mechanism?.scope === '.toFuture().get()' && !/parallel/.test(rb.evidence.mechanism.text)
-    && !/\d/.test(rb.evidence.mechanism.text), JSON.stringify(rb.evidence.mechanism)));
+test('.toFuture().get(): measured deadlock (H3), pinned to 1052498, with the shared-loops condition and the limit', () =>
+  assert(rb.evidence.mechanism === undefined && rb.evidence.results[2].source.includes('/blob/1052498/cli/verify/reactor-block/replication/results/criteria.md#L27-L48')
+    && /deadlocked every request/.test(rb.evidence.results[2].text) && /in 15\/15 runs \(10, 50 and 400 requests\/s\) 0 responses succeeded and the downstream did not receive a single request/.test(rb.evidence.results[2].text)
+    && /pre-registered minimum .* was met exactly at its threshold \(3\/15 runs/.test(rb.evidence.results[2].text) && !/whether or not all event loops were held/.test(rb.evidence.results[2].text) && /server's event loops \(Spring Boot's default shared resources\)/.test(rb.evidence.results[2].text)
+    && /own LoopResources was not measured/.test(rb.evidence.results[2].text), JSON.stringify(rb.evidence.results[2])));
 test('the rule description no longer says it pins a Schedulers.parallel() worker', () =>
   assert(!/pins the calling thread \(e\.g\. a Schedulers\.parallel\(\) worker/.test(rb.full) && /it does not pin the thread/.test(rb.full) && /on the Netty event loop/.test(rb.full), rb.full));
 

@@ -12,8 +12,18 @@
   - Reactor throws `IllegalStateException` on every call, and 100 % of the requests
     through that path failed with HTTP 500 at every load measured.
 
-  The finding message, the rule description and its evidence say so. `.toFuture().get()`
-  keeps "documented mechanism". Detection and severity do not change.
+  The finding message, the rule description and its evidence say so. Detection and
+  severity do not change.
+- **`reactor-block`: `.toFuture().get()` evidence is now measured.** Pre-registered
+  replication, hypothesis H3 (formulated from the first experiment's data):
+  - in a WebFlux handler, with the WebClient on the server's event loops (Spring Boot's
+    default), every such request deadlocked: in 15/15 runs at 10, 50 and 400
+    requests/s, 0 responses succeeded and the downstream received no request;
+  - with all event loops held, the rest of the server stopped too;
+  - the pre-registered minimum for the same deadlock with loops still free was met
+    exactly at its threshold (3/15 runs).
+
+  The message and the evidence say so.
 - **`reactor-block` no longer reports two `.block()` shapes measured not to stall any
   Reactor thread** (same experiment, variants A4 and C):
   - `.block()` inside `Mono`/`Flux.fromCallable`/`fromSupplier`/`fromRunnable` moved with

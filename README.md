@@ -82,7 +82,7 @@ Each rule's evidence is graded with the same criterion as the CLI output: it cou
 | Rule | Evidence |
 |------|----------|
 | VIBE-001 `TransactionalAsyncRule` | Reproduced — `--verify VIBE-001` |
-| VIBE-002 `ReactorBlockingCallRule` | Measured for `.block()` on a Reactor thread, `Schedulers.parallel()` worker or Netty event loop (fails fast, see below); documented mechanism for `.toFuture().get()` |
+| VIBE-002 `ReactorBlockingCallRule` | Measured for `.block()` on a Reactor thread, `Schedulers.parallel()` worker or Netty event loop (fails fast, see below); measured deadlock for `.toFuture().get()` on the event loop (see below) |
 | VIBE-003 `JpaNPlusOneRule` | Documented mechanism, no benchmark of our own |
 | VIBE-004 `VirtualThreadsMisuseRule` | Documented mechanism, no benchmark of our own |
 | VIBE-005 `ConnectionPoolStarvationRule` | Reproduced — `--verify VIBE-001` (same mechanism) |
@@ -107,7 +107,15 @@ Each rule's evidence is graded with the same criterion as the CLI output: it cou
 
 The same holds on the **Netty event loop** (`.block()` in a WebFlux handler), measured by a pre-registered replication ([`cli/verify/reactor-block/replication/`](cli/verify/reactor-block/replication/), [criteria](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/1052498/cli/verify/reactor-block/replication/results/criteria.md#L15-L25)). It does not hold the event loop: 100 % of the requests through that path failed with HTTP 500 and an `IllegalStateException` naming the `reactor-http-epoll-N` thread, at 10, 50 and 400 requests/s. The count was made on the load generator alone, with no cross-process clock alignment. The first experiment's event-loop result did not meet its criterion because of a clock artifact, and stays exploratory.
 
-For `.toFuture().get()` the stated mechanism (the call pins the thread for the whole I/O wait) stays documented, not measured.
+`.toFuture().get()` in a WebFlux handler, with the WebClient on the server's event loops (Spring Boot's default shared resources), **deadlocks every request**. Measured by the same replication ([criteria](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/1052498/cli/verify/reactor-block/replication/results/criteria.md#L27-L48)), at 10, 50 and 400 requests/s, in 15/15 runs:
+- 0 responses succeeded;
+- the downstream did not receive a single request: the request never left the app.
+
+When all 4 event loops were held (every run at 400 requests/s), the rest of the server stopped too.
+
+The pre-registered minimum for the same deadlock with event loops still free was met exactly at its threshold. In 3 of 15 runs, 2 of the 4 loops were held while requests on new connections that block nothing were still served.
+
+This hypothesis was formulated from the first experiment's data and then tested in the pre-registered replication. Measured on Spring Boot 3.2.5, reactor-core 3.6.5, reactor-netty 1.1.18 (native epoll) and OpenJDK 21. A WebClient with its own `LoopResources` was not measured.
 
 ---
 
