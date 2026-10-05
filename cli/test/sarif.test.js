@@ -134,7 +134,7 @@ const fixtureFindings = [
   finding({
     rule: 'reactor-block',
     severity: 'critical',
-    message: "Reactive blocking call '.block()' inside Spring bean — on a Schedulers.parallel() worker it throws IllegalStateException on every call (measured); compose with .flatMap()/.then() instead, or, if the call must block, run it in Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic()) (a bounded pool: capacity = threads / call duration)",
+    message: "Reactive blocking call '.block()' inside Spring bean — on a Reactor thread (Netty event loop or Schedulers.parallel() worker) it throws IllegalStateException on every call (measured); compose with .flatMap()/.then() instead, or, if the call must block, run it in Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic()) (a bounded pool: capacity = threads / call duration)",
     location: 'src/main/java/com/example/search/FileContentSearchService.java:12',
   }),
   finding({

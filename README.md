@@ -82,7 +82,7 @@ Each rule's evidence is graded with the same criterion as the CLI output: it cou
 | Rule | Evidence |
 |------|----------|
 | VIBE-001 `TransactionalAsyncRule` | Reproduced — `--verify VIBE-001` |
-| VIBE-002 `ReactorBlockingCallRule` | Measured for `.block()` on a `Schedulers.parallel()` worker (fails fast, see below); documented mechanism for the event loop and `.toFuture().get()` |
+| VIBE-002 `ReactorBlockingCallRule` | Measured for `.block()` on a Reactor thread, `Schedulers.parallel()` worker or Netty event loop (fails fast, see below); documented mechanism for `.toFuture().get()` |
 | VIBE-003 `JpaNPlusOneRule` | Documented mechanism, no benchmark of our own |
 | VIBE-004 `VirtualThreadsMisuseRule` | Documented mechanism, no benchmark of our own |
 | VIBE-005 `ConnectionPoolStarvationRule` | Reproduced — `--verify VIBE-001` (same mechanism) |
@@ -105,7 +105,9 @@ Each rule's evidence is graded with the same criterion as the CLI output: it cou
 
 **Evidence:** measured by the CLI's pre-registered `reactor-block` experiment ([`cli/verify/reactor-block/`](cli/verify/reactor-block/), [criteria](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c934bd7/cli/verify/reactor-block/results/criteria.md#L32-L46)) for `.block()` on a `Schedulers.parallel()` worker: it does **not** pin the worker. Reactor throws `IllegalStateException` ("block()/blockFirst()/blockLast() are blocking, which is not supported in thread parallel-N") on every call, so 100 % of the requests through that path failed with HTTP 500 at every load measured, not only under load. It is still a defect, of a different kind: it fails as soon as the path runs, tests included. Measured on Spring Boot 3.2.5, reactor-core 3.6.5 and reactor-netty 1.1.18.
 
-On the Netty event loop and for `.toFuture().get()`, the experiment did not meet its pre-registered criteria, so the stated mechanism (the call pins the thread for the whole I/O wait) stays documented, not measured; the results are published in the same directory.
+The same holds on the **Netty event loop** (`.block()` in a WebFlux handler), measured by a pre-registered replication ([`cli/verify/reactor-block/replication/`](cli/verify/reactor-block/replication/), [criteria](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/1052498/cli/verify/reactor-block/replication/results/criteria.md#L15-L25)). It does not hold the event loop: 100 % of the requests through that path failed with HTTP 500 and an `IllegalStateException` naming the `reactor-http-epoll-N` thread, at 10, 50 and 400 requests/s. The count was made on the load generator alone, with no cross-process clock alignment. The first experiment's event-loop result did not meet its criterion because of a clock artifact, and stays exploratory.
+
+For `.toFuture().get()` the stated mechanism (the call pins the thread for the whole I/O wait) stays documented, not measured.
 
 ---
 

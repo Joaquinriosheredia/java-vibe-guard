@@ -2,15 +2,18 @@
 
 ## Unreleased
 
-- **`reactor-block`: what `.block()` on a `Schedulers.parallel()` worker does is now
-  measured, and it is not what the rule said.** Pre-registered experiment
-  (`cli/verify/reactor-block/`, H1 "holds the thread" against H2 "fails fast"): on a
-  `parallel` worker (the README "Found in the Wild" Finding 2 shape), `.block()` does
-  not hold the worker. Reactor throws `IllegalStateException` on every call, and 100 %
-  of the requests through that path failed with HTTP 500 at every load measured. The
-  finding message, the rule description and its evidence say so. The event loop and
-  `.toFuture().get()` keep "documented mechanism": the experiment did not meet its
-  pre-registered criteria for them. Detection and severity do not change.
+- **`reactor-block`: what `.block()` on a Reactor thread does is now measured, and it is
+  not what the rule said.** Pre-registered experiment (`cli/verify/reactor-block/`, H1
+  "holds the thread" against H2 "fails fast"), plus a pre-registered replication for
+  the event loop (`cli/verify/reactor-block/replication/`):
+  - on a `Schedulers.parallel()` worker (the README "Found in the Wild" Finding 2 shape)
+    and on the Netty event loop (a WebFlux handler), `.block()` does not hold the
+    thread;
+  - Reactor throws `IllegalStateException` on every call, and 100 % of the requests
+    through that path failed with HTTP 500 at every load measured.
+
+  The finding message, the rule description and its evidence say so. `.toFuture().get()`
+  keeps "documented mechanism". Detection and severity do not change.
 - **`reactor-block` no longer reports two `.block()` shapes measured not to stall any
   Reactor thread** (same experiment, variants A4 and C):
   - `.block()` inside `Mono`/`Flux.fromCallable`/`fromSupplier`/`fromRunnable` moved with
