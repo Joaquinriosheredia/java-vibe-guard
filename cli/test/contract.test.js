@@ -343,6 +343,40 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
   }
 }
 {
+  // The fixes the reactor-block messages recommend must not be flagged by reactor-block
+  // itself (decision 2026-10-05): .flatMap()/.then() composition, the boundedElastic
+  // escape hatch for a call that must block, and .subscribe().
+  const lines = [
+    'package demo;',
+    'import org.springframework.web.bind.annotation.RestController;',
+    'import reactor.core.publisher.Mono;',
+    'import reactor.core.scheduler.Schedulers;',
+    '@RestController',
+    'public class RecommendedFixes {',
+    '    private Client client;',
+    '    public Mono<String> composed() {',
+    '        return client.call().flatMap(x -> client.other(x));',
+    '    }',
+    '    public Mono<Void> then() {',
+    '        return client.call().then();',
+    '    }',
+    '    public Mono<String> mustBlock() {',
+    '        return Mono.fromCallable(() -> client.call().block()).subscribeOn(Schedulers.boundedElastic());',
+    '    }',
+    '    public void fireAndForget() {',
+    '        client.call().subscribe();',
+    '    }',
+    '    interface Client { Mono<String> call(); Mono<String> other(String s); }',
+    '}',
+  ];
+  const findings = checkReactorBlock([{ filePath: '/nonexistent/RecommendedFixes.java', relativePath: 'RecommendedFixes.java', lines }]);
+  assert(findings.length === 0, `the fixes recommended by reactor-block's messages are not flagged by it: got ${findings.map(f => f.location).join(', ')}`);
+  const messages = [...new Set(checkReactorBlock([{ filePath: '/nonexistent/X.java', relativePath: 'X.java', lines: [
+    'import reactor.core.publisher.Mono;', '@RestController', 'public class X {', '    public String a(Mono<String> m) throws Exception {',
+    '        String s = m.block();', '        return m.toFuture().get();', '    }', '}'] }]).map(f => f.message))];
+  assert(messages.length === 2 && messages.every(m => !/\.map\b/.test(m)), `no reactor-block message recommends .map (flagged when it wraps a blocking call): ${messages.join(' | ')}`);
+}
+{
   // Gate (a): same @Service + .block() shape as the true positive, but the
   // file never imports reactor.core.publisher — the one deliberate
   // difference from VIBE-002 (which has no import gate at all). Checked

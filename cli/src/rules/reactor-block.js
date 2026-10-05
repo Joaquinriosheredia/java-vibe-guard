@@ -174,7 +174,7 @@ export function checkReactorBlock(fileContexts) {
         findings.push({
           severity: 'critical',
           rule: 'reactor-block',
-          message: `Reactive blocking call '.${m[1]}()' inside Spring bean — on a Schedulers.parallel() worker it throws IllegalStateException on every call (measured); use reactive composition (.flatMap, .map, .then) instead`,
+          message: `Reactive blocking call '.${m[1]}()' inside Spring bean — on a Schedulers.parallel() worker it throws IllegalStateException on every call (measured); compose with .flatMap()/.then() instead, or, if the call must block, run it in Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic()) (a bounded pool: capacity = threads / call duration)`,
           location: `${relativePath}:${i + 1}`,
         });
       }
