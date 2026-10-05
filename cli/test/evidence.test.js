@@ -127,8 +127,12 @@ test('cites the pre-registered results at a6f32ef', () =>
 console.log('\nreactor-block: wording decided on 2026-10-04 (pre-registered H2 for Schedulers.parallel())');
 const rb = RULE_CATALOG['reactor-block'];
 const rbText = (rb.evidence.results ?? []).map(r => r.text).join(' ');
-test('is measured, one result, for .block() on Schedulers.parallel()', () =>
-  assert(rb.evidence.kind === 'measured' && rb.evidence.results.length === 1 && /Schedulers\.parallel\(\)/.test(rb.evidence.results[0].lab), JSON.stringify(rb.evidence)));
+test('is measured, two results: .block() on Schedulers.parallel() and on the Netty event loop', () =>
+  assert(rb.evidence.kind === 'measured' && rb.evidence.results.length === 2 && /Schedulers\.parallel\(\)/.test(rb.evidence.results[0].lab)
+    && /Netty event loop/.test(rb.evidence.results[1].lab), JSON.stringify(rb.evidence)));
+test('event loop: cites the pre-registered replication at 1052498, generator-side count', () =>
+  assert(rb.evidence.results[1].source.includes('/blob/1052498/cli/verify/reactor-block/replication/results/criteria.md#L15-L25')
+    && /does not hold the event loop/.test(rb.evidence.results[1].text) && /reactor-http-epoll-N/.test(rb.evidence.results[1].text), JSON.stringify(rb.evidence.results[1])));
 test('says it does not hold the thread and throws IllegalStateException on every call', () =>
   assert(/does not hold the thread/.test(rbText) && /IllegalStateException/.test(rbText) && /on every call/.test(rbText), rbText));
 test('says 100% of affected requests failed with HTTP 500 at every load measured', () =>
@@ -138,11 +142,11 @@ test('states the versions measured', () =>
 test('quotes no absolute latency', () => assert(!/\d+(\.\d+)?\s*(ms|s)\b/.test(rbText), rbText));
 test('cites the pre-registered results at c934bd7', () =>
   assert(rb.evidence.results[0].source.includes('/blob/c934bd7/cli/verify/reactor-block/results/criteria.md'), rb.evidence.results[0].source));
-test('the event loop and .toFuture().get() stay documented mechanism, without parallel workers', () =>
-  assert(rb.evidence.mechanism?.scope === '.block() on the Netty event loop, .toFuture().get()' && !/parallel/.test(rb.evidence.mechanism.text)
+test('.toFuture().get() stays documented mechanism', () =>
+  assert(rb.evidence.mechanism?.scope === '.toFuture().get()' && !/parallel/.test(rb.evidence.mechanism.text)
     && !/\d/.test(rb.evidence.mechanism.text), JSON.stringify(rb.evidence.mechanism)));
 test('the rule description no longer says it pins a Schedulers.parallel() worker', () =>
-  assert(!/pins the calling thread \(e\.g\. a Schedulers\.parallel\(\) worker/.test(rb.full) && /it does not pin the worker/.test(rb.full), rb.full));
+  assert(!/pins the calling thread \(e\.g\. a Schedulers\.parallel\(\) worker/.test(rb.full) && /it does not pin the thread/.test(rb.full) && /on the Netty event loop/.test(rb.full), rb.full));
 
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`📊 Results: ${passed} passed, ${failed} failed`);

@@ -124,7 +124,7 @@ export const RULE_CATALOG = {
   },
   'reactor-block': {
     short: 'Reactive blocking call (.block()/.blockFirst()/.blockLast()/.toFuture().get()) inside a Spring bean.',
-    full: 'Detects .block(), .blockFirst(), .blockLast(), or .toFuture().get() inside a class annotated @RestController, @Service, or @Component, in a file that imports reactor.core.publisher — the CLI port of the MCP server\'s VIBE-002 (ReactorBlockingCallRule). Excludes @Test, @PostConstruct, and main() methods. Measured for .block() on a Schedulers.parallel() worker (README "Found in the Wild" Finding 2 shape, FileContentSearchService.java, eugenp/tutorials): it does not pin the worker; Reactor throws IllegalStateException on every call, so every request through that path fails (HTTP 500) at any load, as soon as the path runs (tests that run it fail too). On the Netty event loop, and for .toFuture().get(), the stated mechanism (the call pins the thread for the full I/O duration) is documented, not measured: the pre-registered experiment did not meet its criteria for those two (cli/verify/reactor-block). Not reported (measured not to stall any Reactor thread, same experiment, variants A4 and C): a .block() inside Mono/Flux.fromCallable/fromSupplier/fromRunnable moved with .subscribeOn(Schedulers.boundedElastic()) and no publishOn (a bounded pool, whose capacity is threads / call duration), and a plain .block() statement in a @RestController of a module whose build file declares Spring MVC and not WebFlux (it runs on the servlet worker). .blockFirst()/.blockLast()/.toFuture().get() in those shapes are still reported.',
+    full: 'Detects .block(), .blockFirst(), .blockLast(), or .toFuture().get() inside a class annotated @RestController, @Service, or @Component, in a file that imports reactor.core.publisher — the CLI port of the MCP server\'s VIBE-002 (ReactorBlockingCallRule). Excludes @Test, @PostConstruct, and main() methods. Measured for .block() on a Reactor thread, both on a Schedulers.parallel() worker (README "Found in the Wild" Finding 2 shape, FileContentSearchService.java, eugenp/tutorials) and on the Netty event loop (a WebFlux handler): it does not pin the thread; Reactor throws IllegalStateException on every call, so every request through that path fails (HTTP 500) at any load, as soon as the path runs (tests that run it fail too). For .toFuture().get() the stated mechanism (the call pins the thread for the full I/O duration) is documented, not measured (cli/verify/reactor-block). Not reported (measured not to stall any Reactor thread, same experiment, variants A4 and C): a .block() inside Mono/Flux.fromCallable/fromSupplier/fromRunnable moved with .subscribeOn(Schedulers.boundedElastic()) and no publishOn (a bounded pool, whose capacity is threads / call duration), and a plain .block() statement in a @RestController of a module whose build file declares Spring MVC and not WebFlux (it runs on the servlet worker). .blockFirst()/.blockLast()/.toFuture().get() in those shapes are still reported.',
     severities: ['critical'],
     evidence: {
       kind: 'measured',
@@ -138,9 +138,18 @@ export const RULE_CATALOG = {
           text: 'a .block() on a Schedulers.parallel() worker (the README "Found in the Wild" Finding 2 shape: .block() inside .map() after subscribeOn(Schedulers.parallel())) does not hold the thread: Reactor throws IllegalStateException ("block()/blockFirst()/blockLast() are blocking, which is not supported in thread parallel-N") on every call, so 100% of the requests through that path failed with HTTP 500 at every load measured (10, 50 and 400 requests/s), not only under load; the workers were not held (0-0.9% of their samples inside blockingGet) and other work on them was not delayed. Measured on Spring Boot 3.2.5, reactor-core 3.6.5, reactor-netty 1.1.18',
           source: 'https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c934bd7/cli/verify/reactor-block/results/criteria.md#L32-L46',
         },
+        {
+          lab: 'java-vibe-guard verify/reactor-block replication — .block() on the Netty event loop',
+          // Pre-registered replication (replication/PREREGISTRATION.md at f606904), results at
+          // 1052498: A1 met H2 at every load, counted on the generator alone (no cross-process
+          // clock alignment); (0), (e)-B and (f) met. The first experiment's A1 data stay
+          // exploratory (#20, DEVIATIONS.md 4).
+          text: 'a .block() on the Netty event loop (in a WebFlux handler) does not hold the event loop either: Reactor throws IllegalStateException ("block()/blockFirst()/blockLast() are blocking, which is not supported in thread reactor-http-epoll-N") on every call, so 100% of the requests through that path failed with HTTP 500 at every load measured (10, 50 and 400 requests/s); the event loops were not held (0-0.6% of their samples inside blockingGet) and other requests on them were not delayed. Measured on Spring Boot 3.2.5, reactor-core 3.6.5, reactor-netty 1.1.18 (native epoll)',
+          source: 'https://github.com/Joaquinriosheredia/java-vibe-guard/blob/1052498/cli/verify/reactor-block/replication/results/criteria.md#L15-L25',
+        },
       ],
-      // Not measured as pre-registered: the event loop and .toFuture().get().
-      mechanism: { scope: '.block() on the Netty event loop, .toFuture().get()', text: 'blocking pins a Reactor thread (the Netty event loop) for the whole I/O wait; with few such threads, throughput collapses under load' },
+      // Not measured as pre-registered: .toFuture().get().
+      mechanism: { scope: '.toFuture().get()', text: 'the call holds a Reactor thread (the Netty event loop) for the whole I/O wait; with few such threads, throughput collapses under load' },
     },
   },
   transactions: {
