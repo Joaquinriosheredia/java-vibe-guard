@@ -14,7 +14,7 @@
  * A new call that breaks either rule fails this test.
  */
 import { readdirSync, readFileSync, statSync } from 'fs';
-import { join, dirname, relative } from 'path';
+import { join, dirname, relative, sep } from 'path';
 import { fileURLToPath } from 'url';
 
 const CLI_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -113,7 +113,7 @@ console.log('\n── Shipped code ──');
 const files = shippedFiles();
 const all = { calls: [], problems: [] };
 for (const f of files) {
-  const r = auditSource(readFileSync(f, 'utf8'), relative(CLI_DIR, f));
+  const r = auditSource(readFileSync(f, 'utf8'), relative(CLI_DIR, f).split(sep).join('/'));
   all.calls.push(...r.calls);
   all.problems.push(...r.problems);
 }
