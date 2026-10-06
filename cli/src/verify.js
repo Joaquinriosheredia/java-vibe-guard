@@ -1,4 +1,5 @@
-import { spawn, execFileSync } from 'child_process';
+import { execFileSync } from 'child_process';
+import { runBounded } from './child-process.js';
 import { createRequire } from 'module';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -35,21 +36,15 @@ function tcDoctorCommand() {
 // networks/CI runners. Resolves { sections } or { error: 'timeout'|'failed' }.
 const TC_DOCTOR_TIMEOUT_MS = 60_000;
 
-function runTCDoctorCheck(check) {
-  return new Promise((resolve) => {
-    const { cmd, args } = tcDoctorCommand();
-    const tc = spawn(cmd, [...args, '--json', '--no-color', '--check', check], { timeout: TC_DOCTOR_TIMEOUT_MS });
-    let out = '';
-    let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; }, TC_DOCTOR_TIMEOUT_MS);
-    tc.stdout.on('data', (d) => { out += d; });
-    tc.on('close', () => {
-      clearTimeout(timer);
-      try { resolve({ sections: JSON.parse(out).sections ?? {} }); }
-      catch { resolve({ error: timedOut ? 'timeout' : 'failed' }); }
-    });
-    tc.on('error', () => { clearTimeout(timer); resolve({ error: 'failed' }); });
-  });
+// stdout (the JSON) and stderr are both read (runBounded): before 2.2.1 the
+// doctor's stderr was never read, the same unread-stream risk that hung Maven.
+async function runTCDoctorCheck(check) {
+  const { cmd, args } = tcDoctorCommand();
+  const tc = await runBounded(cmd, [...args, '--json', '--no-color', '--check', check],
+    { timeoutMs: TC_DOCTOR_TIMEOUT_MS, keepStdout: true });
+  if (tc.timedOut) return { error: 'timeout' };
+  try { return { sections: JSON.parse(tc.stdout).sections ?? {} }; }
+  catch { return { error: 'failed' }; }
 }
 
 async function runTCDoctor() {

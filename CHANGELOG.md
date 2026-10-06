@@ -1,5 +1,38 @@
 # Changelog
 
+## 2.2.1
+
+npm `2.2.1`, Action `@v2.2.1` / `@v2`. CLI only: the MCP server is unchanged, and its
+jar stays the one attached to the v2.0.0 release. Scanning, rules and findings do not
+change.
+
+- **`--verify` hangs in 2.2.0 with Maven 3.10; update to 2.2.1.** In 2.2.0,
+  `--verify VIBE-001` could wait forever, with no output and no error, on a first run
+  (Postgres image not cached yet) when the `mvn` on `PATH` is 3.10.x:
+  - 2.2.0 never read Maven's stdout;
+  - Maven 3.10.0 writes its console one byte at a time, and the unread stream filled
+    after ~64 KB of the ~67 KB a first run prints;
+  - Maven then blocked and waited for its test JVM forever, and the 300 s limit did not
+    stop it.
+
+  Diagnosis, measurements and a one-variable-at-a-time reproduction:
+  [`cli/verify/vibe-001/HANG-2.2.0.md`](cli/verify/vibe-001/HANG-2.2.0.md). Docker and
+  Testcontainers were not involved and did not change.
+- **`--verify` reads every child's stdout and stderr** (Maven and testcontainers-doctor,
+  whose stderr 2.2.0 did not read either).
+- **Its time limit now works:** after 5 minutes it kills the whole process tree — a
+  process group on Linux and macOS, `taskkill /T /F` on Windows — and reports "Maven did
+  not finish within 300s" with Maven's last output. Ctrl+C during `--verify` also stops
+  Maven and its test JVM.
+- **New test:** every child process the CLI starts must read or explicitly discard its
+  stdout and stderr (`test/child-process-stdio.test.js`), plus regression tests for the
+  hang (`test/child-process.test.js`, also run on Windows for the tree kill).
+- CI: a watchdog dumps thread stacks and the process tree if `--verify` stalls, and the
+  packaged-smoke job has a time limit.
+- The repository no longer versions `cli/node_modules` (tracked by mistake since
+  `d79bd46`): the CI and the Action already install with `npm ci`, and the npm package is
+  unaffected.
+
 ## 2.2.0
 
 npm `2.2.0`, Action `@v2.2.0` / `@v2`. CLI only: the MCP server is unchanged, and its

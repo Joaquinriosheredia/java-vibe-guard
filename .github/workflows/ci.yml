@@ -30,6 +30,33 @@ jobs:
         run: npm test
         working-directory: cli
 
+  # ── 1b. Child processes on Windows ──────────────────────────────────────────
+  # --verify's time limit must kill the whole process tree on Windows too
+  # (taskkill /T /F); the Linux side runs in `npm test` above. The fake-mvn part
+  # of the suite is skipped on Windows (see verify/vibe-001/HANG-2.2.0.md).
+  child-process-windows:
+    name: Child-process tree kill (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install CLI dependencies
+        run: npm ci
+        working-directory: cli
+
+      - name: Child-process tests
+        # bash (Git Bash) fails on the first non-zero exit; pwsh would only check the last.
+        shell: bash
+        run: |
+          node test/child-process.test.js
+          node test/child-process-stdio.test.js
+        working-directory: cli
+
   # ── 2. Self-scan — java-vibe-guard scans its own CLI source ─────────────────
   self-scan:
     name: Self-scan

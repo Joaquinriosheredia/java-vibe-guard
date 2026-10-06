@@ -2,3 +2,7 @@ mcp-server/target/
 
 validation/results/*.json
 !validation/results/summary.json
+
+# Installed by `npm ci` (CI, the Action, local); never versioned. Was tracked
+# from d79bd46 until 2.2.1.
+cli/node_modules/

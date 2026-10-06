@@ -129,7 +129,9 @@ export function runRepo({ repo, commit, checkoutPath, status } = {}, { spawnFn =
   }
 
   const startedAt = Date.now();
+  // stdout (the JSON report) and stderr are read: spawnSync buffers both into `result`.
   const result = spawnFn(process.execPath, [CLI_BIN, checkoutPath, '--format', 'json'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
     encoding: 'utf8',
     timeout: SCAN_TIMEOUT_MS,
   });

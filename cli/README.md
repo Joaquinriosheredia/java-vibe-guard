@@ -182,6 +182,8 @@ npx java-vibe-guard --verify VIBE-001
 
 Runs a bundled Spring Boot app (HikariCP pool of 5, `@Transactional` method holding its connection during an async wait) against a Postgres container, sends 20 concurrent requests, and checks that the pool saturates, requests queue for connections, and p95 latency rises above 800 ms. Takes about a minute (longer the first time, while Maven and the Postgres image download).
 
+> **`--verify` hangs in 2.2.0 with Maven 3.10; update to 2.2.1.** In 2.2.0, `--verify VIBE-001` can wait forever without an error on its first run (when the Postgres image is not cached yet) if the `mvn` on `PATH` is 3.10.x. 2.2.1 fixes it and stops a run that exceeds 5 minutes ([details](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/cli/verify/vibe-001/HANG-2.2.0.md)).
+
 **Requires Docker 24+, Java 17+, Maven on `PATH`** and 512 MB of free memory. The environment pre-check ([testcontainers-doctor](https://www.npmjs.com/package/testcontainers-doctor)) ships as a dependency — nothing to install globally.
 
 - Available today: `VIBE-001` only.
