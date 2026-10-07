@@ -114,9 +114,48 @@ if (at('VariantA4Controller.java').length !== 0) throw new Error(`boundedElastic
 if (mvc.length !== 0) throw new Error(`MVC-only @RestController .block() (C): expected no finding, got ${JSON.stringify(mvc)}`);
 EOF
 
+# --verify hung silently on some CI runner images (2026-10-06, master after #29).
+# Watchdog: if it has not finished after VERIFY_WATCHDOG_S — below the verifier's own
+# 300 s Maven timeout, so the JVMs are still alive — dump what every JVM and the
+# processes around them are doing, then kill the tree and fail visibly.
+VERIFY_WATCHDOG_S="${VERIFY_WATCHDOG_S:-240}"
+# Only the --verify process tree is inspected or killed — never other JVMs on the machine.
+descendants() { local c; for c in $(pgrep -P "$1" || true); do echo "$c"; descendants "$c"; done; }
+verify_diagnostics() {
+  local tree pid
+  tree="$1 $(descendants "$1")"
+  echo "::group::--verify diagnostics: not finished after ${VERIFY_WATCHDOG_S}s"
+  # shellcheck disable=SC2086
+  ps -o pid,ppid,etimes,stat,wchan:32,args -p ${tree// /,} | cut -c1-300
+  local jstack_bin="${JAVA_HOME:+$JAVA_HOME/bin/}jstack"
+  for pid in $tree; do
+    [[ "$(cat "/proc/$pid/comm" 2>/dev/null)" == java ]] || continue
+    echo "--- JVM $pid: $(tr '\0' ' ' < "/proc/$pid/cmdline" | cut -c1-300)"
+    echo "    fd1 (stdout) -> $(readlink "/proc/$pid/fd/1" 2>/dev/null)   fd2 (stderr) -> $(readlink "/proc/$pid/fd/2" 2>/dev/null)"
+    "$jstack_bin" "$pid" 2>&1 || true
+  done
+  # Testcontainers logs to the test JVM's stdout; the containers it started:
+  docker ps -a --format '{{.ID}} {{.Image}} {{.Status}}' || true
+  for c in $(docker ps -aq 2>/dev/null); do
+    echo "--- docker logs $c (last 30 lines)"; docker logs --tail 30 "$c" 2>&1 || true
+  done
+  echo "::endgroup::"
+}
+
 if [[ "${SMOKE_VERIFY:-0}" == "1" ]]; then
   echo "running the real --verify VIBE-001 from the installed package…"
-  "${JVG[@]}" --verify VIBE-001 --no-color || fail "--verify VIBE-001 failed from the installed package"
+  "${JVG[@]}" --verify VIBE-001 --no-color & verify_pid=$!
+  for ((s = 0; s < VERIFY_WATCHDOG_S; s++)); do
+    kill -0 "$verify_pid" 2>/dev/null || break
+    sleep 1
+  done
+  if kill -0 "$verify_pid" 2>/dev/null; then
+    verify_diagnostics "$verify_pid"
+    # shellcheck disable=SC2046
+    kill -KILL "$verify_pid" $(descendants "$verify_pid") 2>/dev/null || true
+    fail "--verify VIBE-001 did not finish within ${VERIFY_WATCHDOG_S}s (diagnostics above)"
+  fi
+  wait "$verify_pid" || fail "--verify VIBE-001 failed from the installed package"
   [[ ! -e "$WORK/project/node_modules/java-vibe-guard/verify/vibe-001/app/target" ]] \
     || fail "--verify wrote build output inside the installed package"
 fi

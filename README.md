@@ -26,6 +26,8 @@ Reproduces a VIBE rule's anti-pattern in a live environment and confirms the phe
 npx java-vibe-guard --verify VIBE-001
 ```
 
+> **`--verify` hangs in 2.2.0 with Maven 3.10; update to 2.2.1.** In 2.2.0, `--verify VIBE-001` can wait forever without an error on its first run (when the Postgres image is not cached yet) if the `mvn` on `PATH` is 3.10.x. 2.2.1 fixes it and stops a run that exceeds 5 minutes ([details](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/cli/verify/vibe-001/HANG-2.2.0.md)).
+
 Requires Docker 24+, Java 17+, Maven on `PATH`, and 512 MB of free memory. The environment pre-check (`testcontainers-doctor`) ships as a dependency — nothing to install globally.
 
 ### GitHub Actions (CI)

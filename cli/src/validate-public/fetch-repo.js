@@ -152,8 +152,10 @@ export function fetchRepo({ repo, commit }, { spawnFn = spawnSync } = {}) {
   ];
 
   for (const step of steps) {
+    // stdout/stderr are read: spawnSync buffers both into `result` (classifyGitFailure reads them).
     const result = spawnFn('git', step.args, {
       cwd: step.cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf8',
       timeout: GIT_TIMEOUT_MS,
     });

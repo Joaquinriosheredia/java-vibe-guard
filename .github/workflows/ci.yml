@@ -30,6 +30,33 @@ jobs:
         run: npm test
         working-directory: cli
 
+  # ── 1b. Child processes on Windows ──────────────────────────────────────────
+  # --verify's time limit must kill the whole process tree on Windows too
+  # (taskkill /T /F); the Linux side runs in `npm test` above. The fake-mvn part
+  # of the suite is skipped on Windows (see verify/vibe-001/HANG-2.2.0.md).
+  child-process-windows:
+    name: Child-process tree kill (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install CLI dependencies
+        run: npm ci
+        working-directory: cli
+
+      - name: Child-process tests
+        # bash (Git Bash) fails on the first non-zero exit; pwsh would only check the last.
+        shell: bash
+        run: |
+          node test/child-process.test.js
+          node test/child-process-stdio.test.js
+        working-directory: cli
+
   # ── 2. Self-scan — java-vibe-guard scans its own CLI source ─────────────────
   self-scan:
     name: Self-scan
@@ -65,6 +92,9 @@ jobs:
     name: Packaged tarball smoke test
     runs-on: ubuntu-latest
     needs: contract-tests
+    # --verify hung silently for 27 min on a runner image (2026-10-06); never again
+    # wait for GitHub's 6 h default.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -83,11 +113,46 @@ jobs:
         run: npm ci
         working-directory: cli
 
+      # Facts about the runner that --verify depends on, printed before it runs:
+      # image, Docker client/server and the minimum API the daemon accepts,
+      # Docker/Testcontainers overrides, Java and Maven.
+      - name: Environment for --verify
+        run: |
+          echo "runner image: ${ImageOS:-?} ${ImageVersion:-?}"
+          docker version --format 'docker client {{.Client.Version}} (API {{.Client.APIVersion}}) / server {{.Server.Version}} (API {{.Server.APIVersion}}, min API {{.Server.MinAPIVersion}})'
+          docker info --format 'storage {{.Driver}}, cgroup {{.CgroupDriver}} v{{.CgroupVersion}}, runtime {{.DefaultRuntime}}, containerd snapshotter: {{.DriverStatus}}' || true
+          env | grep -E '^(DOCKER_|TESTCONTAINERS_|TC_)' || echo "no DOCKER_*/TESTCONTAINERS_* variables"
+          cat ~/.testcontainers.properties 2>/dev/null || echo "no ~/.testcontainers.properties"
+          cat ~/.docker/config.json 2>/dev/null | grep -vi auth || echo "no ~/.docker/config.json"
+          java -version 2>&1 | head -1; mvn -v 2>&1 | head -1
+          # Node gives a child's stdout a UNIX socketpair: its capacity is set by these.
+          sysctl net.core.wmem_default net.core.rmem_default net.core.wmem_max net.core.rmem_max 2>/dev/null || true
+
       - name: Pack, install in a clean project and smoke-test
         run: scripts/smoke-pack.sh dist
         working-directory: cli
         env:
           SMOKE_VERIFY: '1'
+
+      # Diagnosis of the 2026-10-06 hang: the same Maven run --verify starts, with
+      # stdout to a file instead of an unread pipe, image not cached (as on a fresh
+      # runner). Measures how much the build writes to stdout and whether it finishes.
+      - name: Measure the --verify Maven run (diagnostics)
+        if: always()
+        timeout-minutes: 10
+        working-directory: cli/verify/vibe-001/app
+        run: |
+          docker rmi -f postgres:16-alpine >/dev/null 2>&1 || true
+          start=$(date +%s)
+          set +e
+          mvn test -Dtest=VerifyRunner -Dvibe.verify=true -Dvibe.output.file="$RUNNER_TEMP/m.json" -q --no-transfer-progress \
+            > "$RUNNER_TEMP/mvn-stdout.txt" 2> "$RUNNER_TEMP/mvn-stderr.txt"
+          code=$?
+          set -e
+          echo "mvn exit=$code after $(( $(date +%s) - start ))s; stdout $(wc -c < "$RUNNER_TEMP/mvn-stdout.txt") bytes, stderr $(wc -c < "$RUNNER_TEMP/mvn-stderr.txt") bytes (a Linux pipe holds 65536)"
+          grep -E 'Testcontainers version|Connected to docker|API Version|Server Version' -A1 "$RUNNER_TEMP/mvn-stdout.txt" | head -12 || true
+          echo "--- stdout lines by logger (top 10)"
+          sed -E 's/^[0-9:.]+ \[[^]]*\] [A-Z]+ ([^ ]+).*/\1/' "$RUNNER_TEMP/mvn-stdout.txt" | sort | uniq -c | sort -rn | head -10
 
       - name: Upload the tested tarball
         uses: actions/upload-artifact@v4
