@@ -61,7 +61,7 @@ function assertFieldOrder(stdout, fields, label) {
   assert(inOrder, label);
 }
 
-const EIGHT_RULE_IDS = ['blocking', 'blocking-kafka', 'kafka', 'kafka-send-timeout', 'layers', 'observability', 'reactor-block', 'transactions'];
+const EIGHT_RULE_IDS = ['blocking', 'blocking-kafka', 'kafka', 'kafka-send-timeout', 'layers', 'observability', 'reactor-block', 'async-returns-pending-future', 'transactions'];
 const AVAILABLE_LIST = EIGHT_RULE_IDS.join(', ');
 
 // ─── §1: Purpose — no project scan, no path argument ─────────────────────────

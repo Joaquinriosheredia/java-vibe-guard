@@ -150,6 +150,20 @@ test('.toFuture().get(): measured deadlock (H3), pinned to 1052498, with the sha
 test('the rule description no longer says it pins a Schedulers.parallel() worker', () =>
   assert(!/pins the calling thread \(e\.g\. a Schedulers\.parallel\(\) worker/.test(rb.full) && /it does not pin the thread/.test(rb.full) && /on the Netty event loop/.test(rb.full), rb.full));
 
+console.log('\nasync-returns-pending-future: B0 v1 (design approved 2026-10-06)');
+const apf = RULE_CATALOG['async-returns-pending-future'];
+const apfText = apf.evidence.results.map(r => r.text).join(' ');
+test('measured, three results pinned to 11651ca: saturation (a)-(d), nested deadlock (g), virtual threads (f)', () =>
+  assert(apf.evidence.kind === 'measured' && apf.evidence.results.length === 3
+    && apf.evidence.results.every(r => r.source.includes('/blob/11651ca/cli/verify/async-pending-future/results/criteria.md#L'))
+    && /#L15-L38$/.test(apf.evidence.results[0].source) && /#L51-L61$/.test(apf.evidence.results[1].source) && /#L47-L49$/.test(apf.evidence.results[2].source), JSON.stringify(apf.evidence)));
+test('states the condition and the limits measured', () =>
+  assert(/8 platform threads, unbounded queue/.test(apfText) && /Spring Boot 3\.2\.5 \/ Spring Framework 6\.1\.6, proxy mode, return type CompletableFuture/.test(apfText), apfText));
+test('the nested form: deadlock from 20 tasks/s, none at 10', () =>
+  assert(/0 completions in the last 10 s of every run at 20, 36, 60 and 120 tasks\/s/.test(apfText) && /at 10 tasks\/s no run deadlocked/.test(apfText), apfText));
+test('says what v1 does not detect and why', () =>
+  assert(/NOT detected in this version/.test(apf.full) && /analysis across files/.test(apf.full), apf.full));
+
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`📊 Results: ${passed} passed, ${failed} failed`);
 if (failed > 0) {

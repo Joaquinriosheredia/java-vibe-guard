@@ -61,6 +61,15 @@ export const FIXTURE_LEDGER = {
   'reactor-block-precision/mvc-only/src/main/java/demo/MvcController.java':      { 'reactor-block': { critical: 3 } },
   'reactor-block-precision/mvc-only/src/main/java/demo/MvcService.java':         { 'reactor-block': { critical: 1 } },
   'reactor-block-precision/webflux/src/main/java/demo/ReactiveController.java':  { 'reactor-block': { critical: 4 } },
+  // async-returns-pending-future (B0 v1, design approved 2026-10-06): M1-M8 and M10
+  // reported; M9 (nested form between two beans) and N5 (the measured shape P) are v2 and
+  // stay 0 here on purpose (OrderService, PnNotProvable, VtService.m9, CeService.m9).
+  'async-pending-future/base/src/main/java/demo/ReportService.java':         { 'async-returns-pending-future': { critical: 8 } },
+  'async-pending-future/base/src/main/java/demo/SelfInjectedService.java':   { 'async-returns-pending-future': { critical: 2 } },
+  // 0 from async-returns-pending-future; the join() of n15 is a true positive of blocking.
+  'async-pending-future/base/src/main/java/demo/NotMarkedShapes.java':       { blocking: { critical: 1 } },
+  'async-pending-future/virtual-threads/src/main/java/demo/VtService.java':  { 'async-returns-pending-future': { warning: 2 } },
+  'async-pending-future/custom-executor/src/main/java/demo/CeService.java':  { 'async-returns-pending-future': { critical: 1 } },
   // Expected to produce zero findings (listed for completeness, not required):
   // BlockingAnomalouslyLongMethodProbe, BlockingFalsePositive,
   // BlockingWindowCommentProbe, BlockingWindowMisattributionProbe (0a: their

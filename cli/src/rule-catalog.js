@@ -19,7 +19,7 @@
 // same rank sarif.js's SEVERITY_RANK and reporter.js's SEVERITY_ORDER use).
 // Hand-maintained: if cli/src/rules/*.js ever changes what severity a rule
 // id emits, this array must be updated here too — nothing enforces the two
-// staying in sync automatically. Evidence for the eight values below:
+// staying in sync automatically. Evidence for the nine values below:
 //   - blocking: 'critical', and 'warning' for a call whose only anchor is @Async
 //     in a module whose base configuration enables virtual threads
 //     (blocking.js mergeByCall, virtual-threads.js; measured: verify/blocking
@@ -40,6 +40,9 @@
 //     @EventListener/@KafkaListener annotation present). Measured in
 //     verify/reactor-block: that shape throws IllegalStateException on every
 //     call instead of holding the worker.
+//   - async-returns-pending-future: 'critical', and 'warning' in a module whose base
+//     configuration enables virtual threads (async-pending-future.js, the same
+//     virtual-threads.js criterion as blocking; measured: verify/async-pending-future (f)).
 //   - transactions: 'critical' (transactions.js:35) and 'major'
 //     (transactions.js:23) — the only mixed-severity rule id today.
 export const RULE_CATALOG = {
@@ -154,6 +157,35 @@ export const RULE_CATALOG = {
           // as the pre-registration states.
           text: 'a .toFuture().get() in a WebFlux handler, with the WebClient on the server\'s event loops (Spring Boot\'s default shared resources), deadlocked every request: in 15/15 runs (10, 50 and 400 requests/s) 0 responses succeeded and the downstream did not receive a single request - the request never left the app. When all 4 event loops were held (every run at 400 requests/s), the rest of the server stopped too. The pre-registered minimum for the same deadlock with event loops still free was met exactly at its threshold (3/15 runs with 2 of 4 loops held while requests that block nothing on new connections were still served). Measured on Spring Boot 3.2.5, reactor-core 3.6.5, reactor-netty 1.1.18 (native epoll), OpenJDK 21; a WebClient with its own LoopResources was not measured',
           source: 'https://github.com/Joaquinriosheredia/java-vibe-guard/blob/1052498/cli/verify/reactor-block/replication/results/criteria.md#L27-L48',
+        },
+      ],
+    },
+  },
+  'async-returns-pending-future': {
+    short: '@Async method returns a CompletableFuture that is still pending.',
+    full: 'Detects an @Async method (Spring\'s annotation, on the method or its class; public, not static or final, in a non-final class) declared to return CompletableFuture whose return statement hands back a future that this same file shows to be still pending: CompletableFuture.supplyAsync/runAsync; a non-async stage (thenApply, thenAccept, thenRun, thenCompose, thenCombine, handle, whenComplete, exceptionally, orTimeout, completeOnTimeout) on one of these shapes; any ...Async stage; WebClient ... retrieve()/exchangeToMono(...) ... toFuture(); java.net.http HttpClient.sendAsync; KafkaTemplate.send (Spring Kafka 3.x); a new CompletableFuture completed only in a callback (f::complete, v -> f.complete(v)) or never in the method; CompletableFuture.allOf with a pending argument; and self.m() through a self-injected proxy of the same class, m being @Async there. Spring\'s interceptor calls get() on the returned future on the executor thread, so the thread is held until the future completes and the default executor saturates like a blocking call. For self.m() on the same default executor, with no own executor and no virtual threads, the message reports the measured starvation deadlock; with an own executor (AsyncConfigurer, an executor @Bean, spring.task.execution.*) or different @Async qualifiers it reports the saturation only. Severity is critical, or warning when the module\'s base configuration enables virtual threads (same criterion as blocking). NOT detected in this version, on purpose: (1) the measured shape itself, `return downstream.call().thenApply(...)` where the pending future comes from the body of a method of another bean, and (2) the nested form between two beans, `return otherBean.asyncMethod()`: both need analysis across files, planned together for a later version; until then they are false negatives. Also not reported: completed futures (completedFuture, failedFuture), self-invocation without the proxy (this.m(), which runs inline), parameters and fields, return types Future/ListenableFuture/CompletionStage and the AspectJ mode (not measured), meta-annotations of @Async.',
+    severities: ['critical', 'warning'],
+    evidence: {
+      kind: 'measured',
+      results: [
+        {
+          lab: 'java-vibe-guard verify/async-pending-future — @Async returning a pending future',
+          // Pre-registered experiment (PREREGISTRATION.md at c5ae6ad), results at 11651ca:
+          // H confirmed, criteria (a)-(e) met, 125/125 runs OK.
+          text: "an @Async method returning a CompletableFuture that completes 200 ms later held its executor thread: 100% of the executor-thread samples were in the get() that Spring's interceptor calls on the returned future. On Spring Boot's default @Async executor (8 platform threads, unbounded queue) throughput capped at 39.7 tasks/s (79.5 with 16 threads), the queue grew at load - capacity and 98-99% of latency was queue wait; returning an already completed future (completedFuture) did not queue. Measured on Spring Boot 3.2.5 / Spring Framework 6.1.6, proxy mode, return type CompletableFuture",
+          source: 'https://github.com/Joaquinriosheredia/java-vibe-guard/blob/11651ca/cli/verify/async-pending-future/results/criteria.md#L15-L38',
+        },
+        {
+          lab: 'java-vibe-guard verify/async-pending-future — nested form on the same executor',
+          // Same experiment, independent hypothesis HN, criterion (g) met.
+          text: 'an @Async method returning the future of another bean\'s @Async method on the same default executor starvation-deadlocked: 0 completions in the last 10 s of every run at 20, 36, 60 and 120 tasks/s, with all 8 threads in get() and inner tasks queued behind them; at 10 tasks/s no run deadlocked (9.97 completions/s)',
+          source: 'https://github.com/Joaquinriosheredia/java-vibe-guard/blob/11651ca/cli/verify/async-pending-future/results/criteria.md#L51-L61',
+        },
+        {
+          lab: 'java-vibe-guard verify/async-pending-future — virtual threads',
+          // Criterion (f): decides the severity only, not the hypothesis.
+          text: 'with spring.threads.virtual.enabled=true the default @Async executor did not saturate at 120 tasks/s (queue slope 0, p99 200 ms); the nested form with virtual threads was not measured',
+          source: 'https://github.com/Joaquinriosheredia/java-vibe-guard/blob/11651ca/cli/verify/async-pending-future/results/criteria.md#L47-L49',
         },
       ],
     },

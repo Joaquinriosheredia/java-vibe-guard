@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- **New rule `async-returns-pending-future` (CRITICAL; WARNING with virtual threads),
+  in the default set.** An `@Async` method that returns a `CompletableFuture` which is
+  still pending holds its executor thread: Spring's interceptor calls `get()` on it on
+  that thread. Measured in the pre-registered experiment
+  [`cli/verify/async-pending-future`](cli/verify/async-pending-future/) (results at
+  `11651ca`): the default executor saturates like a blocking call, and the nested form
+  on the same executor starvation-deadlocks. The rule reports only futures that one file
+  proves pending (`supplyAsync`/`runAsync`, `…Async` stages, `WebClient…toFuture()`,
+  `HttpClient.sendAsync`, `KafkaTemplate.send`, a future completed only in a callback,
+  `allOf`, and `self.m()` through a self-injected proxy).
+- **What it does not detect yet, on purpose:** the measured shape itself
+  (`return downstream.call().thenApply(...)`, the pending future built in another bean)
+  and the deadlock between two beans (`return otherBean.asyncMethod()`). Both need
+  analysis across files, planned for a later version; until then they are false
+  negatives. Completed futures, `this.m()`, `Future`/`ListenableFuture` return types and
+  the AspectJ mode are not reported either.
+
 ## 2.2.1
 
 npm `2.2.1`, Action `@v2.2.1` / `@v2`. CLI only: the MCP server is unchanged, and its

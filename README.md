@@ -203,7 +203,7 @@ Full options:
 - uses: Joaquinriosheredia/java-vibe-guard@v2
   with:
     path: '.'
-    rule: ''             # blank = all rules; or: blocking | blocking-kafka | kafka | kafka-send-timeout | layers | transactions | observability | reactor-block
+    rule: ''             # blank = all rules; or: blocking | blocking-kafka | kafka | kafka-send-timeout | layers | transactions | observability | reactor-block | async-returns-pending-future
     ignore: 'labs,demo'  # comma-separated dirs to skip
     fail-on: 'critical'  # critical | never
     upload-report: 'true'  # attach JSON report as artifact
@@ -278,6 +278,7 @@ The two layers are deliberately redundant in purpose but not in mechanism. The r
 | Blocking call inside `@KafkaListener` | Layers 2 + 3 (cli `blocking-kafka` + VIBE-006) |
 | Kafka `send().get()` with no timeout argument | Layer 2 only (cli `kafka-send-timeout`) |
 | `.block()`/`.blockFirst()`/`.blockLast()`/`.toFuture().get()` in a Reactor chain inside an `@Service`/`@RestController`/`@Component` class, in any method other than `@Test`/`@PostConstruct`/`main()` | Layers 2 + 3 (cli `reactor-block` + VIBE-002) |
+| `@Async` method returning a `CompletableFuture` that one file proves still pending (not yet: the pending future built in another bean, or the deadlock between two beans) | Layer 2 only (cli `async-returns-pending-future`) |
 | Controller accessing repository directly | Layer 2 only (cli `layers`) |
 | Endpoint without structured logging | Layer 2 only (cli `observability`) |
 | Generated code the LLM declares correct but isn't | Layer 3 (immediate feedback) |
