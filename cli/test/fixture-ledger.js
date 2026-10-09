@@ -26,6 +26,8 @@ export const FIXTURE_LEDGER = {
   'BlockingStackedAnnotationBracesProbe.java':    { 'blocking-kafka': { critical: 1 } },
   'BlockingTruePositive.java':                    { blocking: { critical: 1 } },
   'KafkaBlockingProbe.java':                      { 'blocking-kafka': { critical: 1 } },
+  // 2026-10-09: @Async anchors only when it is Spring's. Fully qualified, no import → 1.
+  'BlockingQualifiedSpringAsyncProbe.java':       { blocking: { critical: 1 } },
   'KafkaSendTimeoutTruePositive.java':            { 'kafka-send-timeout': { critical: 2 } },
   'KafkaTruePositive.java':                       { kafka: { warning: 2 } },
   // 0 layers findings; the observability warning is a true positive of
@@ -64,7 +66,8 @@ export const FIXTURE_LEDGER = {
   // async-returns-pending-future (B0 v1, design approved 2026-10-06): M1-M8 and M10
   // reported; M9 (nested form between two beans) and N5 (the measured shape P) are v2 and
   // stay 0 here on purpose (OrderService, PnNotProvable, VtService.m9, CeService.m9).
-  'async-pending-future/base/src/main/java/demo/ReportService.java':         { 'async-returns-pending-future': { critical: 8 } },
+  // M2 over M8 (allOf(...).thenApply(...)) reported since 2026-10-09: 8 -> 9.
+  'async-pending-future/base/src/main/java/demo/ReportService.java':         { 'async-returns-pending-future': { critical: 9 } },
   'async-pending-future/base/src/main/java/demo/SelfInjectedService.java':   { 'async-returns-pending-future': { critical: 2 } },
   // 0 from async-returns-pending-future; the join() of n15 is a true positive of blocking.
   'async-pending-future/base/src/main/java/demo/NotMarkedShapes.java':       { blocking: { critical: 1 } },
@@ -75,7 +78,8 @@ export const FIXTURE_LEDGER = {
   // BlockingWindowCommentProbe, BlockingWindowMisattributionProbe (0a: their
   // listeners now carry @RetryableTopic, so kafka.js's DLQ check no longer
   // adds 3 incidental warnings — they produce 0 findings from any rule),
-  // BlockingFutureGetFalsePositive, CommentMentionGateProbe, KafkaFalsePositive,
+  // BlockingFutureGetFalsePositive, BlockingJcabiAsyncFalsePositive (2026-10-09),
+  // CommentMentionGateProbe, KafkaFalsePositive,
   // KafkaSendTimeoutFalsePositive, ObservabilityFalsePositive,
   // ReactorBlockFalsePositive, TransactionsBlockCommentGateProbe,
   // TransactionsFalsePositive.

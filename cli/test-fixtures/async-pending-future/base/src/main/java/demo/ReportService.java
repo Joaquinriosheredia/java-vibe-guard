@@ -11,7 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 // async-returns-pending-future (B0 v1): M1-M8, one per method, each a future that is
-// still pending when the @Async method returns it. Expected: critical 8.
+// still pending when the @Async method returns it, plus M2 over M8 (approved 2026-10-09).
+// Expected: critical 9.
 @Service
 public class ReportService {
     private final WebClient webClient;                       // M4
@@ -53,6 +54,10 @@ public class ReportService {
     @Async public CompletableFuture<Void> m8() {
         CompletableFuture<String> a = CompletableFuture.supplyAsync(() -> "a");
         return CompletableFuture.allOf(a, CompletableFuture.completedFuture("b")); // M8
+    }
+    @Async public CompletableFuture<Integer> m2OverM8() {
+        CompletableFuture<String> a = CompletableFuture.supplyAsync(() -> "a");
+        return CompletableFuture.allOf(a).thenApply(v -> 1);                   // M2 over M8
     }
 
     interface Listener { void onEvent(java.util.function.Consumer<String> callback); }

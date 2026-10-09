@@ -13,7 +13,7 @@ import { moduleRoot, virtualThreadsEnabled, VT_KEY } from './virtual-threads.js'
 // and M10 in v1. Principle: when in doubt, do not report. Only a `return` whose future
 // is pending for certain, from what this file shows, is reported:
 //   M1 CompletableFuture.supplyAsync/runAsync    M5 HttpClient.sendAsync (java.net.http)
-//   M2 a non-async stage over M1, M3-M7          M6 KafkaTemplate.send (Spring Kafka 3.x)
+//   M2 a non-async stage over M1, M3-M8          M6 KafkaTemplate.send (Spring Kafka 3.x)
 //   M3 an ...Async stage, whatever the origin    M7 new CompletableFuture<>() completed only
 //   M4 WebClient ... retrieve() ... toFuture()      in a callback, or never in the method
 //   M8 CompletableFuture.allOf(...) with a pending argument
@@ -491,7 +491,7 @@ function pendingShape(ctx, expr, depth = 0) {
     const s = segs[i];
     if (!s.call) return null;
     if (ASYNC_STAGES.has(s.call)) { pending = true; form = 'M3'; continue; }
-    if (M2_STAGES.has(s.call) && pending && form !== 'M8') { form = form === 'M3' ? 'M3' : 'M2'; continue; }
+    if (M2_STAGES.has(s.call) && pending) { form = form === 'M3' ? 'M3' : 'M2'; continue; }
     pending = false; form = null;
   }
   return pending ? { form, shape: render(segs) } : null;

@@ -57,10 +57,6 @@ public class NotMarkedShapes {
         fill(f);                                                         // may complete it synchronously
         return f;                                                        // not provable → 0
     }
-    @Async public CompletableFuture<Integer> m8ThenStage() {
-        CompletableFuture<String> a = CompletableFuture.supplyAsync(() -> "a");
-        return CompletableFuture.allOf(a).thenApply(v -> 1);             // M2 over M8: not in the approved list → 0
-    }
     private String load() { return "x"; }
     private void fill(CompletableFuture<String> f) { f.complete("x"); }
 

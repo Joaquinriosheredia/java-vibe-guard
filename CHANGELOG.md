@@ -18,6 +18,11 @@
   analysis across files, planned for a later version; until then they are false
   negatives. Completed futures, `this.m()`, `Future`/`ListenableFuture` return types and
   the AspectJ mode are not reported either.
+- **`blocking`: `@Async` is an anchor only when it is Spring's**
+  (`org.springframework.scheduling.annotation.Async`, imported, imported with `.*`, or
+  written fully qualified). Another library's `@Async` (jcabi-aspects, found in
+  eugenp/tutorials) runs on its own executor, not the one `verify/blocking` measured, and
+  is no longer reported. Fewer findings only.
 
 ## 2.2.1
 

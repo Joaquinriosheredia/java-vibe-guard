@@ -308,20 +308,21 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
 // async-returns-pending-future (B0 v1) ────────────────────────────────────
 {
   // Design approved 2026-10-06 (vibe-guard docs/FASE-3-b0-deteccion-diseno.md): M1-M8 and
-  // M10 reported, by exact location; every other shape in these modules is 0, including the
-  // v2 shapes M9 and N5 (accepted false negatives in v1).
+  // M10 reported, plus M2 over M8 (2026-10-09), by exact location; every other shape in
+  // these modules is 0, including the v2 shapes M9 and N5 (accepted false negatives in v1).
   const { stdout } = run(['--json', '--rule', 'async-returns-pending-future', join(FIXTURES, 'async-pending-future')]);
   const issues = JSON.parse(stdout).issues;
   const got = issues.map(i => `${i.severity} ${i.location}`).sort();
   const want = [
-    'critical base/src/main/java/demo/ReportService.java:27',        // M1 supplyAsync
-    'critical base/src/main/java/demo/ReportService.java:30',        // M2 thenApply over M1
-    'critical base/src/main/java/demo/ReportService.java:33',        // M3 thenApplyAsync
-    'critical base/src/main/java/demo/ReportService.java:36',        // M4 WebClient, multi-line, at the return
-    'critical base/src/main/java/demo/ReportService.java:42',        // M5 HttpClient.sendAsync
-    'critical base/src/main/java/demo/ReportService.java:46',        // M6 KafkaTemplate.send via a local
-    'critical base/src/main/java/demo/ReportService.java:51',        // M7 completed only in a callback
-    'critical base/src/main/java/demo/ReportService.java:55',        // M8 allOf with a pending argument
+    'critical base/src/main/java/demo/ReportService.java:28',        // M1 supplyAsync
+    'critical base/src/main/java/demo/ReportService.java:31',        // M2 thenApply over M1
+    'critical base/src/main/java/demo/ReportService.java:34',        // M3 thenApplyAsync
+    'critical base/src/main/java/demo/ReportService.java:37',        // M4 WebClient, multi-line, at the return
+    'critical base/src/main/java/demo/ReportService.java:43',        // M5 HttpClient.sendAsync
+    'critical base/src/main/java/demo/ReportService.java:47',        // M6 KafkaTemplate.send via a local
+    'critical base/src/main/java/demo/ReportService.java:52',        // M7 completed only in a callback
+    'critical base/src/main/java/demo/ReportService.java:56',        // M8 allOf with a pending argument
+    'critical base/src/main/java/demo/ReportService.java:60',        // M2 thenApply over M8 (approved 2026-10-09)
     'critical base/src/main/java/demo/SelfInjectedService.java:19',  // M10, same default executor
     'critical base/src/main/java/demo/SelfInjectedService.java:28',  // M10, different executor
     'critical custom-executor/src/main/java/demo/CeService.java:17', // M10, own executor
@@ -335,13 +336,13 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
   assert(deadlock.test(at('SelfInjectedService.java:19')) && /SelfInjectedService\.inner\(\)/.test(at('SelfInjectedService.java:19'))
     && /blob\/11651ca\/cli\/verify\/async-pending-future\/results\/criteria\.md#L51-L61/.test(at('SelfInjectedService.java:19')),
     'M10 on the same default executor: deadlock message with the measured source (g)');
-  for (const loc of ['SelfInjectedService.java:28', 'CeService.java:17', 'VtService.java:19', 'ReportService.java:27']) {
+  for (const loc of ['SelfInjectedService.java:28', 'CeService.java:17', 'VtService.java:19', 'ReportService.java:28']) {
     assert(!deadlock.test(at(loc)) && /saturates like a blocking call/.test(at(loc)) && /criteria\.md#L15-L23/.test(at(loc)),
       `${loc}: H message (saturation), no deadlock claim`);
   }
   assert(issues.filter(i => i.severity === 'warning').every(i => /WARNING, not CRITICAL: spring\.threads\.virtual\.enabled=true/.test(i.message) && /criteria\.md#L47-L49/.test(i.message)),
     'virtual threads: WARNING suffix citing (f)');
-  assert(/\(CompletableFuture\.supplyAsync\(\.\.\.\)\)/.test(at('ReportService.java:27')), 'the message names the shape');
+  assert(/\(CompletableFuture\.supplyAsync\(\.\.\.\)\)/.test(at('ReportService.java:28')), 'the message names the shape');
 }
 {
   // The measured experiment's own app: P (N5) and PN between two beans (M9) are not

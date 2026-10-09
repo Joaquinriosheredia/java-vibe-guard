@@ -33,7 +33,7 @@ Requires Node.js 18+. Scanning needs nothing else; `--verify` needs more (see be
 
 | Rule | Severity | Pattern |
 |------|----------|---------|
-| **blocking** | 🔴 CRITICAL | `Thread.sleep()`, `.join()`, `.block()`/`.blockFirst()`/`.blockLast()` and `Future.get()` inside `@Async`, `@Scheduled` or `@EventListener` methods (see [Future.get()](#futureget) below) |
+| **blocking** | 🔴 CRITICAL | `Thread.sleep()`, `.join()`, `.block()`/`.blockFirst()`/`.blockLast()` and `Future.get()` inside `@Async` (Spring's), `@Scheduled` or `@EventListener` methods (see [Future.get()](#futureget) below) |
 | **blocking-kafka** | 🔴 CRITICAL | The same blocking calls inside a `@KafkaListener` method |
 | **reactor-block** | 🔴 CRITICAL | `.block()` / `.blockFirst()` / `.blockLast()` / `.toFuture().get()` in a `@RestController`/`@Service`/`@Component` that imports `reactor.core.publisher` |
 | **async-returns-pending-future** | 🔴 CRITICAL | An `@Async` method returning a `CompletableFuture` that this file shows to be still pending (`supplyAsync`, `…Async` stages, `WebClient…toFuture()`, `HttpClient.sendAsync`, `KafkaTemplate.send`, …) — see [below](#async-returns-pending-future) for what it does not detect yet |
