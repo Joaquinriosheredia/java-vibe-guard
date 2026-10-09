@@ -1,0 +1,24 @@
+{
+  "repo": "heowc/SpringBootSample",
+  "commit": "8cdf39ca2624329c497949554e096ed5cea79504",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 84,
+  "scan": {
+    "timestamp": "2026-10-09T17:02:51.475Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-oNsQZU",
+    "filesScanned": 381,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

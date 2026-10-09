@@ -1,0 +1,24 @@
+{
+  "repo": "AlanBinu007/Spring-Boot-Advanced-Projects",
+  "commit": "3405c0028aebf7f1a7cb3e9ca2ac1fb28cf49cf4",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 110,
+  "scan": {
+    "timestamp": "2026-10-09T17:01:06.918Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-jDgttC",
+    "filesScanned": 649,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

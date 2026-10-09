@@ -1,0 +1,31 @@
+{
+  "repo": "nysenate/OpenLegislation",
+  "commit": "f672f9c33073ae9a133708964239748eaf909e5a",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 1,
+  "durationMs": 270,
+  "scan": {
+    "timestamp": "2026-10-09T17:00:48.245Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-4NPl03",
+    "filesScanned": 1048,
+    "summary": {
+      "critical": 1,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 1,
+      "suppressed": 0,
+      "total": 1
+    },
+    "healthy": false,
+    "issues": [
+      {
+        "severity": "critical",
+        "ruleId": "async-returns-pending-future",
+        "message": "@Async method returns a future that is still pending (CompletableFuture.runAsync(...)): Spring's interceptor calls get() on it on the executor thread, so the thread is held until it completes — the default executor saturates like a blocking call (measured: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/11651ca/cli/verify/async-pending-future/results/criteria.md#L15-L23)",
+        "location": "src/main/java/gov/nysenate/openleg/common/util/AsyncUtils.java:19"
+      }
+    ]
+  }
+}

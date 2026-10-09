@@ -1,0 +1,24 @@
+{
+  "repo": "9tigerio/db2rest",
+  "commit": "9971d5dadc8aa391e0ca5de1fd2c104929150a86",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 108,
+  "scan": {
+    "timestamp": "2026-10-09T17:01:05.527Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-pSd5s0",
+    "filesScanned": 420,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "repo": "cmlbeliever/SpringBootLearning",
+  "commit": "4a970d085dd0960331d6b10e28c6ec530f42ded2",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 75,
+  "scan": {
+    "timestamp": "2026-10-09T17:01:46.978Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-21VMos",
+    "filesScanned": 281,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

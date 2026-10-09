@@ -1,0 +1,24 @@
+{
+  "repo": "vector4wang/spring-boot-quick",
+  "commit": "bbdcf80d945d1b27def2ce6ad9493ae7143b9b50",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 109,
+  "scan": {
+    "timestamp": "2026-10-09T16:59:04.704Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-Y3pPl4",
+    "filesScanned": 820,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

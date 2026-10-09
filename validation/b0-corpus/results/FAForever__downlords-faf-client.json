@@ -1,0 +1,24 @@
+{
+  "repo": "FAForever/downlords-faf-client",
+  "commit": "8be1a118df487aa848c892dba99e8b14b6b27a14",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 273,
+  "scan": {
+    "timestamp": "2026-10-09T17:01:29.627Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-SrafDD",
+    "filesScanned": 945,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}
