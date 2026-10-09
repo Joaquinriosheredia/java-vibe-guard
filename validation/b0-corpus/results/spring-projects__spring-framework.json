@@ -1,0 +1,24 @@
+{
+  "repo": "spring-projects/spring-framework",
+  "commit": "2c5c6b580f90ce77973d16d24bce4c5dce00b558",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 2450,
+  "scan": {
+    "timestamp": "2026-10-09T16:58:42.124Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-Qdk3Da",
+    "filesScanned": 10380,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

@@ -10,9 +10,16 @@ const VARIANT_D_SOURCE = 'https://github.com/Joaquinriosheredia/java-vibe-guard/
 const ASYNC_ANNOTATIONS = [
   { re: /@Scheduled\b/,    name: '@Scheduled' },
   { re: /@KafkaListener\b/, name: '@KafkaListener' },
-  { re: /@Async\b/,        name: '@Async' },
+  { re: /@(?:org\.springframework\.scheduling\.annotation\.)?Async\b/, name: '@Async', spring: true },
   { re: /@EventListener\b/, name: '@EventListener' },
 ];
+
+// @Async counts only when it is Spring's (the measured executor is Spring's): a
+// fully qualified annotation, or a simple `@Async` in a file that imports
+// org.springframework.scheduling.annotation.Async (or .*). jcabi-aspects' @Async
+// (eugenp/tutorials libraries-6 JcabiAspectJ.java) runs on its own executor.
+const SPRING_ASYNC_IMPORT_RE = /^\s*import\s+org\.springframework\.scheduling\.annotation\.(?:Async|\*)\s*;/;
+const SPRING_ASYNC_QUALIFIED_RE = /@org\.springframework\.scheduling\.annotation\.Async\b/;
 
 // A bare `.get()` is NOT a pattern here — it can't tell a blocking
 // Future.get() from Optional.get()/Map.get() without type resolution (issue
@@ -77,13 +84,15 @@ export function checkBlocking(fileContexts) {
 
     // Collect positions of async annotations
     const annotatedPositions = [];
+    const springAsyncImported = lines.some(line => SPRING_ASYNC_IMPORT_RE.test(stripComments(line)));
     for (let i = 0; i < lines.length; i++) {
       // Issue #9: strip comments before the anchor test — a comment merely
       // mentioning "@Scheduled"/"@KafkaListener"/etc. (e.g. explaining what a
       // fixture does NOT contain) must not open a detection window.
       const code = stripComments(lines[i]);
-      for (const { re, name } of ASYNC_ANNOTATIONS) {
+      for (const { re, name, spring } of ASYNC_ANNOTATIONS) {
         if (re.test(code)) {
+          if (spring && !springAsyncImported && !SPRING_ASYNC_QUALIFIED_RE.test(code)) continue;
           annotatedPositions.push({ lineIdx: i, annotationName: name });
           break;
         }

@@ -1,0 +1,24 @@
+{
+  "repo": "hexliulab/fund-analysis-agents",
+  "commit": "41592947b1d4e238f2293272a52d24010bbd4dcd",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 70,
+  "scan": {
+    "timestamp": "2026-10-09T17:03:02.027Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-t5LYAs",
+    "filesScanned": 149,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

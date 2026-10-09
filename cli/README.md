@@ -33,9 +33,10 @@ Requires Node.js 18+. Scanning needs nothing else; `--verify` needs more (see be
 
 | Rule | Severity | Pattern |
 |------|----------|---------|
-| **blocking** | 🔴 CRITICAL | `Thread.sleep()`, `.join()`, `.block()`/`.blockFirst()`/`.blockLast()` and `Future.get()` inside `@Async`, `@Scheduled` or `@EventListener` methods (see [Future.get()](#futureget) below) |
+| **blocking** | 🔴 CRITICAL | `Thread.sleep()`, `.join()`, `.block()`/`.blockFirst()`/`.blockLast()` and `Future.get()` inside `@Async` (Spring's), `@Scheduled` or `@EventListener` methods (see [Future.get()](#futureget) below) |
 | **blocking-kafka** | 🔴 CRITICAL | The same blocking calls inside a `@KafkaListener` method |
 | **reactor-block** | 🔴 CRITICAL | `.block()` / `.blockFirst()` / `.blockLast()` / `.toFuture().get()` in a `@RestController`/`@Service`/`@Component` that imports `reactor.core.publisher` |
+| **async-returns-pending-future** | 🔴 CRITICAL | An `@Async` method returning a `CompletableFuture` that this file shows to be still pending (`supplyAsync`, `…Async` stages, `WebClient…toFuture()`, `HttpClient.sendAsync`, `KafkaTemplate.send`, …) — see [below](#async-returns-pending-future) for what it does not detect yet |
 | **kafka-send-timeout** | 🔴 CRITICAL | `.send(...).get()` with no timeout in a file that uses `KafkaTemplate` |
 | **transactions** | 🔴 CRITICAL / 🟡 MAJOR | `@Transactional` + `@Async` on the same method (CRITICAL) · `@Transactional` on a Controller method (MAJOR) |
 | **layers** | 🟡 MAJOR | A Controller using a `*Repository` or `KafkaTemplate` directly |
@@ -87,6 +88,18 @@ The rule flags the blocking call; it does not read `max.poll.records` or `max.po
 - A plain `.block()` statement (no lambda, method reference, `subscribeOn` or `publishOn`) in a `@RestController` of a module whose build file declares Spring MVC and not WebFlux. It runs on the servlet container's worker.
 
 `.blockFirst()`, `.blockLast()`, `.toFuture().get()`, `@Service`/`@Component` classes and modules with both stacks are still reported: they were not measured in those shapes.
+
+### async-returns-pending-future
+
+Spring's `@Async` interceptor calls `get()` on the future the method returns, **on the executor thread**. A future that is still pending holds that thread until it completes, so the default executor saturates like a blocking call; and an `@Async` method that returns the future of another `@Async` method on the same executor, through the proxy, starvation-deadlocks. Both measured in the pre-registered experiment [`verify/async-pending-future`](verify/async-pending-future/) (Spring Boot 3.2.5 / Framework 6.1.6, proxy mode, `CompletableFuture`, default executor).
+
+The rule reports only what one file proves to be pending: `CompletableFuture.supplyAsync`/`runAsync`, a non-async stage on one of those, any `…Async` stage, `WebClient…retrieve()…toFuture()`, `java.net.http.HttpClient.sendAsync`, `KafkaTemplate.send`, a `new CompletableFuture<>()` completed only in a callback, `allOf` with a pending argument, and `self.m()` through a self-injected proxy (reported as the deadlock when the executor is the default one and virtual threads are off). WARNING instead of CRITICAL when the module's base configuration enables virtual threads.
+
+**What this version does not detect, and why.** It looks at one file at a time, so it misses:
+- **the measured shape itself:** `return downstream.call().thenApply(...)`, where the pending future comes from the body of a method in another bean;
+- **the deadlock between two beans:** `return otherBean.asyncMethod()`.
+
+Both need analysis across files, planned for a later version. Until then they are false negatives. It also does not report completed futures (`completedFuture`), `this.m()` (no proxy: it runs inline), parameters or fields, `Future`/`ListenableFuture`/`CompletionStage` return types and the AspectJ mode (not measured).
 
 When a reactive `.block()` matches both `blocking` and `reactor-block` on the same line, only `reactor-block` is reported. A call inside a method with several anchors (e.g. `@Async` + `@Scheduled`) is reported once: `Thread.sleep() detected in method annotated @Async, @Scheduled`.
 
@@ -148,7 +161,8 @@ Options:
   --format <format>  Output format: text (default) | json | sarif
   --json             Alias for --format json
   --rule <name>      Run only one rule: blocking | blocking-kafka | kafka | kafka-send-timeout |
-                     layers | observability | reactor-block | transactions
+                     layers | observability | reactor-block | async-returns-pending-future |
+                     transactions
   --ignore <dirs>    Comma-separated directories to exclude (e.g. labs,demos,test)
   --verbose          List suppressed findings with their rule, location and justification
   --baseline         Write/regenerate vibeguard-baseline.json from the current scan and exit

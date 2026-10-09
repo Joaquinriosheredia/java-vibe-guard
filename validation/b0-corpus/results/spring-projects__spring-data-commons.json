@@ -1,0 +1,24 @@
+{
+  "repo": "spring-projects/spring-data-commons",
+  "commit": "0a3a0b2dd916fc48bd870e2ca80eb289cb58f3d9",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 134,
+  "scan": {
+    "timestamp": "2026-10-09T16:59:37.332Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-T42rKW",
+    "filesScanned": 1126,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

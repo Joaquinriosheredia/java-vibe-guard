@@ -1,0 +1,24 @@
+{
+  "repo": "apache/syncope",
+  "commit": "d7146d414340d8490a7a088da197cce6db0f3f1d",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 290,
+  "scan": {
+    "timestamp": "2026-10-09T17:01:22.747Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-c6yYeH",
+    "filesScanned": 4956,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}
