@@ -1,5 +1,6 @@
 import { relative, sep } from 'path';
 import { moduleRoot, virtualThreadsEnabled, VT_KEY } from './virtual-threads.js';
+import { asyncEnabledInScan } from './enable-async.js';
 
 // async-returns-pending-future (B0 v1). An @Async method that returns a future which
 // is still pending holds its executor thread: Spring's AsyncExecutionInterceptor calls
@@ -25,6 +26,8 @@ import { moduleRoot, virtualThreadsEnabled, VT_KEY } from './virtual-threads.js'
 //   Both need cross-file analysis, which is v2. Also not reported: completed futures,
 //   self-invocation without the proxy (`this.m()`), parameters and fields, return types
 //   Future/ListenableFuture/CompletionStage (not measured), AspectJ mode (not measured).
+// Nothing is reported when the scanned tree has no @EnableAsync (enable-async.js): @Async
+// is inert there (post hoc, after the b0-corpus audit, 2026-10-12).
 
 const RULE = 'async-returns-pending-future';
 const RESULTS = 'https://github.com/Joaquinriosheredia/java-vibe-guard/blob/11651ca/cli/verify/async-pending-future/results/criteria.md';
@@ -597,6 +600,7 @@ function vtSuffix(vt) {
 
 export function checkAsyncPendingFuture(fileContexts) {
   const findings = [];
+  if (!asyncEnabledInScan(fileContexts)) return findings;
   const modules = makeModuleIndex(fileContexts);
 
   for (const fc of fileContexts) {

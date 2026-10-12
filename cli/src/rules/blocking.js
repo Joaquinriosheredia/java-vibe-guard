@@ -2,6 +2,7 @@ import { stripComments } from './strip-comments.js';
 import { extractMethodBodyRange } from './method-body.js';
 import { relative } from 'path';
 import { virtualThreadsEnabled, VT_KEY } from './virtual-threads.js';
+import { asyncEnabledInScan } from './enable-async.js';
 
 // Measured evidence for the WARNING downgrade: verify/blocking variant D (virtual
 // threads enabled) did not saturate the default @Async executor.
@@ -20,6 +21,9 @@ const ASYNC_ANNOTATIONS = [
 // (eugenp/tutorials libraries-6 JcabiAspectJ.java) runs on its own executor.
 const SPRING_ASYNC_IMPORT_RE = /^\s*import\s+org\.springframework\.scheduling\.annotation\.(?:Async|\*)\s*;/;
 const SPRING_ASYNC_QUALIFIED_RE = /@org\.springframework\.scheduling\.annotation\.Async\b/;
+// And only when the scanned tree has @EnableAsync (enable-async.js): without it @Async
+// runs inline on the caller's thread, not on the measured executor (2026-10-12, after the
+// b0-corpus audit). @Scheduled, @EventListener and @KafkaListener are unaffected.
 
 // A bare `.get()` is NOT a pattern here — it can't tell a blocking
 // Future.get() from Optional.get()/Map.get() without type resolution (issue
@@ -78,6 +82,7 @@ function futureGetPatterns(lines) {
 
 export function checkBlocking(fileContexts) {
   const findings = [];
+  let asyncEnabled;   // computed once, on the first Spring @Async anchor
 
   for (const { filePath, lines, relativePath } of fileContexts) {
     if (!filePath.endsWith('.java')) continue;
@@ -93,6 +98,7 @@ export function checkBlocking(fileContexts) {
       for (const { re, name, spring } of ASYNC_ANNOTATIONS) {
         if (re.test(code)) {
           if (spring && !springAsyncImported && !SPRING_ASYNC_QUALIFIED_RE.test(code)) continue;
+          if (spring && !(asyncEnabled ??= asyncEnabledInScan(fileContexts))) continue;
           annotatedPositions.push({ lineIdx: i, annotationName: name });
           break;
         }

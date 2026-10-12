@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { mkdtempSync, copyFileSync, rmSync, writeFileSync, mkdirSync, cpSync } from 'fs';
 import { tmpdir } from 'os';
-import { ledgerTotals, breakdownFromJson, diffAgainstLedger } from './fixture-ledger.js';
+import { ledgerTotals, breakdownFromJson, diffAgainstLedger, OPT_IN_LEDGER } from './fixture-ledger.js';
 import { applySuppressions } from '../src/suppression.js';
 import { loadConfig } from '../src/config.js';
 import { RULES, RULE_FN_ALIASES, dropFindingsShadowedByReactorBlock } from '../src/scanner.js';
@@ -45,10 +45,13 @@ function run(args) {
 // Runs a single fixture file in isolation (copied into its own temp dir) so results
 // from other fixtures in test-fixtures/ can't leak in. collectFiles() requires a
 // directory argument, not a file, hence the copy.
-function runOnFixture(fixtureFileName, rule) {
+// { enableAsync: true } also copies EnableAsyncConfig.java: since 2.3.0 an @Async anchor
+// counts only when the scanned tree has @EnableAsync (enable-async.js).
+function runOnFixture(fixtureFileName, rule, { enableAsync = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'vibe-guard-fixture-'));
   try {
     copyFileSync(join(FIXTURES, fixtureFileName), join(dir, fixtureFileName));
+    if (enableAsync) copyFileSync(join(FIXTURES, 'EnableAsyncConfig.java'), join(dir, 'EnableAsyncConfig.java'));
     const { stdout } = run(['--json', '--rule', rule, dir]);
     return JSON.parse(stdout);
   } finally {
@@ -680,7 +683,7 @@ console.log('\n📋 Test 5a4: BLOCKING_PATTERNS window comment-stripping (issue 
 // verified not to have silenced real detection on any of the four.
 console.log('\n📋 Test 5a5: real detection unaffected on @Async / @EventListener (A3.1)');
 {
-  const json = runOnFixture('BlockingAsyncEventListenerTruePositive.java', 'blocking');
+  const json = runOnFixture('BlockingAsyncEventListenerTruePositive.java', 'blocking', { enableAsync: true });
   assert(json.issues.length === 2, 'BlockingAsyncEventListenerTruePositive.java produces exactly 2 findings (@Async + @EventListener)');
   if (json.issues.length === 2) {
     assert(json.issues.some(i => i.message.includes('@Async')), 'one finding is inside the @Async method');
@@ -731,7 +734,7 @@ console.log('\n📋 Test 5a8: A3.2 case (b) — stacked annotation with braces i
 
 console.log('\n📋 Test 5a9: A3.2 case (c) — modifiers/generics/throws between anchor and method');
 {
-  const json = runOnFixture('BlockingModifiersGenericsThrowsProbe.java', 'blocking');
+  const json = runOnFixture('BlockingModifiersGenericsThrowsProbe.java', 'blocking', { enableAsync: true });
   assert(json.issues.length === 1, 'BlockingModifiersGenericsThrowsProbe.java produces exactly 1 finding');
   if (json.issues.length === 1) {
     assert(json.issues[0].message.includes('@Async'), 'the finding is inside the @Async method');
@@ -750,7 +753,7 @@ console.log('\n📋 Test 5a10: A3.2 case (d) — nested anonymous class inside t
 console.log('\n📋 Test 5a11: A3.2 case (4.b) — double anchor on the same method preserved');
 {
   // 0a (2.0.0): one call, one finding — was 2 (one per anchor) before.
-  const json = runOnFixture('BlockingDoubleAnchorProbe.java', 'blocking');
+  const json = runOnFixture('BlockingDoubleAnchorProbe.java', 'blocking', { enableAsync: true });
   assert(json.issues.length === 1, `BlockingDoubleAnchorProbe.java produces exactly 1 finding for its one Thread.sleep(): got ${json.issues.length}`);
   if (json.issues.length === 1) {
     assert(json.issues[0].location.endsWith(':20'), 'the finding anchors to the real Thread.sleep() line (20)');
@@ -1148,7 +1151,7 @@ console.log('\n📋 Test 18: malformed vibeguard.config.json does not break the 
 console.log('\n📋 Test 18b: Future.get() on Future-typed receivers; .block() reported once');
 {
   // Coverage lost in 7a18298 (issue #5), restored without its false positive.
-  const tp = runOnFixture('BlockingFutureGetTruePositive.java', 'blocking');
+  const tp = runOnFixture('BlockingFutureGetTruePositive.java', 'blocking', { enableAsync: true });
   const tpLines = tp.issues.map(i => Number(i.location.split(':').pop())).sort((a, b) => a - b);
   assert(tp.issues.length === 4, `BlockingFutureGetTruePositive.java: 4 blocking findings (local, field, var, chained): got ${tp.issues.length}`);
   assert(tpLines.join(',') === '26,32,39,44', `findings on the four .get() lines 26,32,39,44: got ${tpLines.join(',')}`);
@@ -1167,6 +1170,7 @@ console.log('\n📋 Test 18b: Future.get() on Future-typed receivers; .block() r
   const dupDir = mkdtempSync(join(tmpdir(), 'vibe-guard-fixture-'));
   try {
     copyFileSync(join(FIXTURES, 'ReactorBlockAsyncDuplicateProbe.java'), join(dupDir, 'ReactorBlockAsyncDuplicateProbe.java'));
+    copyFileSync(join(FIXTURES, 'EnableAsyncConfig.java'), join(dupDir, 'EnableAsyncConfig.java'));
     const all = JSON.parse(run(['--json', dupDir]).stdout);
     const at19 = all.issues.filter(i => i.location.endsWith(':19'));
     assert(at19.length === 1 && at19[0].ruleId === 'reactor-block', `Mono.block() line 19 reported once, as reactor-block: got ${at19.map(i => i.ruleId).join(',') || 'none'}`);
@@ -1266,6 +1270,62 @@ console.log('\n📋 Test 19: zero regression on test-fixtures/ with no config fi
   assert(json.summary.reported === EXPECTED.total && json.summary.total === EXPECTED.total, `reported === total === ${EXPECTED.total}`);
   assert(json.summary.suppressed === 0, 'suppressed is 0 — no config file, no directives');
   assert(exitCode === 1, 'exit code is 1, unchanged — real criticals still fail the build');
+}
+
+// ─── Test 19b (2.3.0): opt-in rules are outside the default set ──────────────
+console.log('\n📋 Test 19b: async-returns-pending-future runs only with --rule');
+{
+  assert(RULES.filter(r => r.optIn).map(r => r.id).join(',') === 'async-returns-pending-future',
+    'the only opt-in rule is async-returns-pending-future');
+  const all = JSON.parse(run(['--json', FIXTURES]).stdout);
+  assert(!all.issues.some(i => i.ruleId === 'async-returns-pending-future'), 'default scan: no async-returns-pending-future finding');
+  for (const [rule, ledger] of Object.entries(OPT_IN_LEDGER)) {
+    const json = JSON.parse(run(['--json', '--rule', rule, FIXTURES]).stdout);
+    const diff = diffAgainstLedger(breakdownFromJson(json), ledger);
+    assert(diff.length === 0, `--rule ${rule} on test-fixtures/ matches OPT_IN_LEDGER${diff.length ? ':\n    ' + diff.join('\n    ') : ''}`);
+  }
+  assert(/^OPT-IN: runs only with --rule async-returns-pending-future/.test(RULE_CATALOG['async-returns-pending-future'].full)
+    && RULE_CATALOG['async-returns-pending-future'].full.includes('3/7 true positives (43 %, Wilson 95 % CI 16-75 %) in a pre-registered corpus of 50 repositories; n too small'),
+    '--explain says opt-in and that precision is not conclusively measured (3/7, 16-75 %)');
+}
+
+// ─── Test 19c (2.3.0): @EnableAsync in the scanned tree ──────────────────────
+// Without @EnableAsync / <task:annotation-driven/> Spring registers no async interceptor:
+// @Async is inert. blocking (its @Async anchor) and async-returns-pending-future report
+// nothing then. Post hoc, after the b0-corpus audit (4 FPs, OsmAnd-tools, no @EnableAsync).
+console.log('\n📋 Test 19c: @Async counts only with @EnableAsync in the scanned tree');
+{
+  const EA = join(FIXTURES, 'enable-async');
+  const scanWith = (extra) => {
+    const dir = mkdtempSync(join(tmpdir(), 'vibe-guard-enable-async-'));
+    try {
+      copyFileSync(join(EA, 'AsyncWork.java'), join(dir, 'AsyncWork.java'));
+      for (const f of extra) cpSync(join(EA, f), join(dir, f.split('/').pop()));
+      const one = rule => JSON.parse(run(['--json', '--rule', rule, dir]).stdout).issues;
+      return { blocking: one('blocking'), apf: one('async-returns-pending-future') };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+  const none = scanWith([]);
+  assert(none.blocking.length === 0, 'no @EnableAsync: blocking reports no @Async finding');
+  assert(none.apf.length === 0, 'no @EnableAsync: async-returns-pending-future reports nothing');
+  const decoys = scanWith(['decoys/NotEnableAsync.java', 'decoys/mvc-annotation-driven.xml']);
+  assert(decoys.blocking.length === 0 && decoys.apf.length === 0,
+    'decoys (comment, string, another library\'s @EnableAsync, mvc/tx annotation-driven): still nothing');
+  for (const cfg of ['config/SpringEnableAsync.java', 'config/QualifiedEnableAsync.java', 'config/task-annotation-driven.xml']) {
+    const r = scanWith([cfg]);
+    assert(r.blocking.length === 1 && r.blocking[0].location === 'AsyncWork.java:16' && r.blocking[0].message === 'blocking .join() detected in @Async method',
+      `${cfg}: blocking reports the @Async .join()`);
+    assert(r.apf.length === 1 && r.apf[0].location === 'AsyncWork.java:21' && r.apf[0].severity === 'critical',
+      `${cfg}: async-returns-pending-future reports the M1 return`);
+  }
+  // @Scheduled / @EventListener / @KafkaListener do not depend on @EnableAsync.
+  const sched = runOnFixture('BlockingDoubleAnchorProbe.java', 'blocking');
+  assert(sched.issues.length === 1 && sched.issues[0].message === 'Thread.sleep() detected in @Scheduled method',
+    'no @EnableAsync: the @Scheduled anchor of an @Async + @Scheduled method still reports, naming @Scheduled only');
+  const kafka = runOnFixture('KafkaBlockingProbe.java', 'blocking-kafka');
+  assert(kafka.issues.length === 1, 'no @EnableAsync: blocking-kafka unchanged');
 }
 
 // ─── Test 20: blocking → WARNING with virtual threads (Phase 2, 2026-10-04) ───

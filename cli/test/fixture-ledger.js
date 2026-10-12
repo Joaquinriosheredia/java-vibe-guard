@@ -63,16 +63,13 @@ export const FIXTURE_LEDGER = {
   'reactor-block-precision/mvc-only/src/main/java/demo/MvcController.java':      { 'reactor-block': { critical: 3 } },
   'reactor-block-precision/mvc-only/src/main/java/demo/MvcService.java':         { 'reactor-block': { critical: 1 } },
   'reactor-block-precision/webflux/src/main/java/demo/ReactiveController.java':  { 'reactor-block': { critical: 4 } },
-  // async-returns-pending-future (B0 v1, design approved 2026-10-06): M1-M8 and M10
-  // reported; M9 (nested form between two beans) and N5 (the measured shape P) are v2 and
-  // stay 0 here on purpose (OrderService, PnNotProvable, VtService.m9, CeService.m9).
-  // M2 over M8 (allOf(...).thenApply(...)) reported since 2026-10-09: 8 -> 9.
-  'async-pending-future/base/src/main/java/demo/ReportService.java':         { 'async-returns-pending-future': { critical: 9 } },
-  'async-pending-future/base/src/main/java/demo/SelfInjectedService.java':   { 'async-returns-pending-future': { critical: 2 } },
-  // 0 from async-returns-pending-future; the join() of n15 is a true positive of blocking.
+  // 0 from async-returns-pending-future (opt-in, see OPT_IN_LEDGER); the join() of n15 is a
+  // true positive of blocking.
   'async-pending-future/base/src/main/java/demo/NotMarkedShapes.java':       { blocking: { critical: 1 } },
-  'async-pending-future/virtual-threads/src/main/java/demo/VtService.java':  { 'async-returns-pending-future': { warning: 2 } },
-  'async-pending-future/custom-executor/src/main/java/demo/CeService.java':  { 'async-returns-pending-future': { critical: 1 } },
+  // 2.3.0: @Async counts only with @EnableAsync in the scanned tree. This whole-tree scan has
+  // it (EnableAsyncConfig.java, enable-async/config/, ...), so the join() is reported; scanned
+  // alone, the file gives 0 (contract.test.js, "@EnableAsync in the scanned tree").
+  'enable-async/AsyncWork.java':                                              { blocking: { critical: 1 } },
   // Expected to produce zero findings (listed for completeness, not required):
   // BlockingAnomalouslyLongMethodProbe, BlockingFalsePositive,
   // BlockingWindowCommentProbe, BlockingWindowMisattributionProbe (0a: their
@@ -83,6 +80,23 @@ export const FIXTURE_LEDGER = {
   // KafkaSendTimeoutFalsePositive, ObservabilityFalsePositive,
   // ReactorBlockFalsePositive, TransactionsBlockCommentGateProbe,
   // TransactionsFalsePositive.
+};
+
+// Opt-in rules (not in the default set, 2.3.0): expected findings of `--rule <id>` on the
+// same whole directory. async-returns-pending-future (B0 v1, design approved 2026-10-06):
+// M1-M8 and M10 reported; M9 (nested form between two beans) and N5 (the measured shape P)
+// are v2 and stay 0 here on purpose (OrderService, PnNotProvable, VtService.m9, CeService.m9).
+// M2 over M8 (allOf(...).thenApply(...)) reported since 2026-10-09: 8 -> 9. Opt-in since
+// 2.3.0 (b0-corpus audit: 7 findings < 20), so these moved out of FIXTURE_LEDGER: 67 -> 53
+// (54 with enable-async/AsyncWork.java, added the same day).
+export const OPT_IN_LEDGER = {
+  'async-returns-pending-future': {
+    'async-pending-future/base/src/main/java/demo/ReportService.java':         { 'async-returns-pending-future': { critical: 9 } },
+    'async-pending-future/base/src/main/java/demo/SelfInjectedService.java':   { 'async-returns-pending-future': { critical: 2 } },
+    'async-pending-future/virtual-threads/src/main/java/demo/VtService.java':  { 'async-returns-pending-future': { warning: 2 } },
+    'async-pending-future/custom-executor/src/main/java/demo/CeService.java':  { 'async-returns-pending-future': { critical: 1 } },
+    'enable-async/AsyncWork.java':                                              { 'async-returns-pending-future': { critical: 1 } },
+  },
 };
 
 export function ledgerTotals(ledger = FIXTURE_LEDGER) {

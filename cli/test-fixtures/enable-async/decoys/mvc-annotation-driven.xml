@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The task namespace is declared, but the annotation-driven elements are mvc's and tx's;
+     <task:annotation-driven/> appears only inside this comment. -->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:task="http://www.springframework.org/schema/task">
+
+    <mvc:annotation-driven/>
+    <tx:annotation-driven/>
+    <task:scheduler id="scheduler" pool-size="2"/>
+</beans>
