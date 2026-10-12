@@ -1,0 +1,24 @@
+{
+  "repo": "smart-doc-group/smart-doc-example-cn",
+  "commit": "eb28abe0124e2c7e1d34421490a22a26fa7c4910",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 70,
+  "scan": {
+    "timestamp": "2026-10-09T17:02:56.815Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-USVhc4",
+    "filesScanned": 308,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

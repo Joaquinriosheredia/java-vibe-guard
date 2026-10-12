@@ -15,7 +15,7 @@ inputs:
     default: '.'
 
   rule:
-    description: 'Run only one rule: blocking | blocking-kafka | kafka | kafka-send-timeout | layers | observability | reactor-block | transactions'
+    description: 'Run only one rule: blocking | blocking-kafka | kafka | kafka-send-timeout | layers | observability | reactor-block | async-returns-pending-future | transactions. Blank runs the default set, which does not include async-returns-pending-future (opt-in)'
     required: false
     default: ''
 

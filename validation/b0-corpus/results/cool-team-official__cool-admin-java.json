@@ -1,0 +1,24 @@
+{
+  "repo": "cool-team-official/cool-admin-java",
+  "commit": "14191d2720158761344efbdfa482702620b2f324",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 72,
+  "scan": {
+    "timestamp": "2026-10-09T17:01:08.371Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-3aKMhx",
+    "filesScanned": 245,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

@@ -1,0 +1,367 @@
+{
+  "selectedAt": "2026-10-09T16:58:14.849Z",
+  "searchedAt": "2026-10-09T16:20:50.239Z",
+  "query": "org.springframework.scheduling.annotation.Async CompletableFuture language:Java",
+  "slices": [
+    "size:<1500",
+    "size:1500..2999",
+    "size:3000..5999",
+    "size:6000..11999",
+    "size:>=12000"
+  ],
+  "n": 50,
+  "candidates": 3040,
+  "eligible": 3039,
+  "repos": [
+    {
+      "repo": "spring-projects/spring-framework",
+      "stars": 60285,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "2c5c6b580f90ce77973d16d24bce4c5dce00b558"
+    },
+    {
+      "repo": "conductor-oss/conductor",
+      "stars": 32272,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "bfc4c7aa9dd1e2f06d5e135f33627e8e7f7eefd5"
+    },
+    {
+      "repo": "dyc87112/SpringBoot-Learning",
+      "stars": 15688,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "4212d163da816c6fa5b28d59130318dac2379a73"
+    },
+    {
+      "repo": "ageerle/ruoyi-ai",
+      "stars": 5741,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "ca6ef96200ae36f7aa3990406841c8ccf3c60192"
+    },
+    {
+      "repo": "oracle-devrel/oracle-ai-developer-hub",
+      "stars": 4411,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "dde0c8b8dc4fbb2de4110448197664994b8e7983"
+    },
+    {
+      "repo": "vector4wang/spring-boot-quick",
+      "stars": 2788,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "bbdcf80d945d1b27def2ce6ad9493ae7143b9b50"
+    },
+    {
+      "repo": "RameshMF/spring-boot-tutorial",
+      "stars": 2030,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "9cdb898b9ba819d8039314314390d2fb4774b0cf"
+    },
+    {
+      "repo": "javahongxi/whatsmars",
+      "stars": 1965,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "98a453333fb1dc4a897ea76f3bf336485bfce684"
+    },
+    {
+      "repo": "tabby-sec/tabby",
+      "stars": 1660,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "be69b0b5364687f73303786270a14e69ce7683c1"
+    },
+    {
+      "repo": "Hello-hao/Tbed",
+      "stars": 1456,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "86987221123931366efbf79b9b029180ddcf52e4"
+    },
+    {
+      "repo": "cBioPortal/cbioportal",
+      "stars": 1049,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "60bca6b224e0a1c5597662a5f7f63e1b5320e1e0"
+    },
+    {
+      "repo": "bytechefhq/bytechef",
+      "stars": 1017,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "75a3c105a2202e0fdcc1882d2e496b2f6114acbf"
+    },
+    {
+      "repo": "houko/SpringBootUnity",
+      "stars": 884,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "48354b549702adb12908ae824cb9b84fa06aa850"
+    },
+    {
+      "repo": "dunwu/spring-tutorial",
+      "stars": 857,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "060d1972ff86cc74a6559f60fff8003dd8aee289"
+    },
+    {
+      "repo": "spring-projects/spring-data-commons",
+      "stars": 841,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "0a3a0b2dd916fc48bd870e2ca80eb289cb58f3d9"
+    },
+    {
+      "repo": "ls1intum/Artemis",
+      "stars": 816,
+      "defaultBranch": "develop",
+      "archived": false,
+      "commit": "760e2e1d79cb47bc334418de282cf9a762777a99"
+    },
+    {
+      "repo": "Grashjs/cmms",
+      "stars": 806,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "347c0e24995c0205d926c1f2f6851665283d73a8"
+    },
+    {
+      "repo": "Urunov/SpringBoot-Projects-FullStack",
+      "stars": 781,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "c54ae7651b629b7690027fd93625f9222922868e"
+    },
+    {
+      "repo": "DataDog/dd-trace-java",
+      "stars": 736,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "f45dec809e4bbed0c9f91b87214e960e1ddc621c"
+    },
+    {
+      "repo": "weiguangli-io/rydr",
+      "stars": 635,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "cc62a5cd9836e030f3cc105d5cd1b44faadaca67"
+    },
+    {
+      "repo": "Harries/springboot-demo",
+      "stars": 578,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "1580f61ca3264e4617c475b3dfafffbe536a00cc"
+    },
+    {
+      "repo": "freechat-fun/freechat",
+      "stars": 552,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "75f72f31ab604cf85981710a5c16bfcc657c1900"
+    },
+    {
+      "repo": "nysenate/OpenLegislation",
+      "stars": 548,
+      "defaultBranch": "dev",
+      "archived": false,
+      "commit": "f672f9c33073ae9a133708964239748eaf909e5a"
+    },
+    {
+      "repo": "Bytedesk/bytedesk",
+      "stars": 504,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "1a8d18f45552c729eaea8093c091f15d5a909fbd"
+    },
+    {
+      "repo": "9tigerio/db2rest",
+      "stars": 471,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "9971d5dadc8aa391e0ca5de1fd2c104929150a86"
+    },
+    {
+      "repo": "AlanBinu007/Spring-Boot-Advanced-Projects",
+      "stars": 471,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "3405c0028aebf7f1a7cb3e9ca2ac1fb28cf49cf4"
+    },
+    {
+      "repo": "cool-team-official/cool-admin-java",
+      "stars": 434,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "14191d2720158761344efbdfa482702620b2f324"
+    },
+    {
+      "repo": "box/mojito",
+      "stars": 388,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "74464d94312d351638d01291406acab91938b636"
+    },
+    {
+      "repo": "dhis2/dhis2-core",
+      "stars": 357,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "91e022c3e288f0af25b98e788b55cf72db42dbf7"
+    },
+    {
+      "repo": "apache/syncope",
+      "stars": 342,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "d7146d414340d8490a7a088da197cce6db0f3f1d"
+    },
+    {
+      "repo": "PacktPublishing/Hands-On-Reactive-Programming-in-Spring-5",
+      "stars": 333,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "8ca99ca69358ba74e003675b6f17a752e3846584"
+    },
+    {
+      "repo": "dunwu/spring-boot-tutorial",
+      "stars": 272,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "c5d0bd2050179502291f5cc72092a93575c44da2"
+    },
+    {
+      "repo": "FAForever/downlords-faf-client",
+      "stars": 217,
+      "defaultBranch": "develop",
+      "archived": false,
+      "commit": "8be1a118df487aa848c892dba99e8b14b6b27a14"
+    },
+    {
+      "repo": "openl-tablets/openl-tablets",
+      "stars": 209,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "5b41c6970378cd3359716dfc5cbfe109fef94793"
+    },
+    {
+      "repo": "antgroup/CloudRec",
+      "stars": 191,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "ba3e682a6e396e4f1624c6796295b9c7191749c7"
+    },
+    {
+      "repo": "cmlbeliever/SpringBootLearning",
+      "stars": 174,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "4a970d085dd0960331d6b10e28c6ec530f42ded2"
+    },
+    {
+      "repo": "zhayinggang/ktv-home",
+      "stars": 173,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "9fa653ac1606e3a110b03718ceee88e9c2281187"
+    },
+    {
+      "repo": "IYque/Iyque-SCRM",
+      "stars": 162,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "288ef707696c4a43ea5da27e1fefe717c9f1cbd9"
+    },
+    {
+      "repo": "tuyucheng7/taketoday-tutorial4j",
+      "stars": 162,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "73466b34cf035eb2dcc7ce283f2341ba445bcd28"
+    },
+    {
+      "repo": "NHA-ABDM/UHI",
+      "stars": 160,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "a1c471437551d33b84174158c837258ce5708d29"
+    },
+    {
+      "repo": "humenglover/yuemu",
+      "stars": 150,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "72f8c16de6e49d5ed0bf04e2adb7cad6749be8da"
+    },
+    {
+      "repo": "mwangli/stock-trading",
+      "stars": 148,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "f4d1281701974bc0fad53e941b2eac9b946809d5"
+    },
+    {
+      "repo": "heowc/SpringBootSample",
+      "stars": 137,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "8cdf39ca2624329c497949554e096ed5cea79504"
+    },
+    {
+      "repo": "osswangxining/iotplatform",
+      "stars": 135,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "864e9e39b4ab0cd678226ae77100fb3e7e0382ac"
+    },
+    {
+      "repo": "GdeiAssistant/GdeiAssistant",
+      "stars": 127,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "f076c76891f85caf2533049a18a16952cf410c93"
+    },
+    {
+      "repo": "smart-doc-group/smart-doc-example-cn",
+      "stars": 124,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "eb28abe0124e2c7e1d34421490a22a26fa7c4910"
+    },
+    {
+      "repo": "molgenis/molgenis",
+      "stars": 122,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "b2b0016b22dcddca3d1666a1b186a4404535897d"
+    },
+    {
+      "repo": "hexliulab/fund-analysis-agents",
+      "stars": 118,
+      "defaultBranch": "main",
+      "archived": false,
+      "commit": "41592947b1d4e238f2293272a52d24010bbd4dcd"
+    },
+    {
+      "repo": "osmandapp/OsmAnd-tools",
+      "stars": 116,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "5ce78b63e17c12c09e325e70dbda6cdcbe36a45f"
+    },
+    {
+      "repo": "hantsy/spring-puzzles",
+      "stars": 114,
+      "defaultBranch": "master",
+      "archived": false,
+      "commit": "18d5dd9091a026aad40503da1e2cc59fdccb78a9"
+    }
+  ]
+}

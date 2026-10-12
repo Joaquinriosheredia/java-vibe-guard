@@ -1,0 +1,24 @@
+{
+  "repo": "dunwu/spring-boot-tutorial",
+  "commit": "c5d0bd2050179502291f5cc72092a93575c44da2",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 107,
+  "scan": {
+    "timestamp": "2026-10-09T17:01:26.762Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-rJZ6vF",
+    "filesScanned": 730,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

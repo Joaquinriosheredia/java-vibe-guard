@@ -1,0 +1,24 @@
+{
+  "repo": "ls1intum/Artemis",
+  "commit": "760e2e1d79cb47bc334418de282cf9a762777a99",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 1897,
+  "scan": {
+    "timestamp": "2026-10-09T16:59:50.240Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-lK3176",
+    "filesScanned": 5474,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

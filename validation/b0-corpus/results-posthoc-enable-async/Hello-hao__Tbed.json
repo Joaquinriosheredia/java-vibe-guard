@@ -1,0 +1,24 @@
+{
+  "repo": "Hello-hao/Tbed",
+  "commit": "86987221123931366efbf79b9b029180ddcf52e4",
+  "status": "ok",
+  "ruleCommit": "8e94d7ce40037eaaff51ef89ac85f619cec74524",
+  "exitCode": 0,
+  "durationMs": 66,
+  "scan": {
+    "timestamp": "2026-10-12T04:49:05.604Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-0uOYgs",
+    "filesScanned": 158,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

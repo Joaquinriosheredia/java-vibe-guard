@@ -1,0 +1,31 @@
+{
+  "repo": "Bytedesk/bytedesk",
+  "commit": "1a8d18f45552c729eaea8093c091f15d5a909fbd",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 1,
+  "durationMs": 453,
+  "scan": {
+    "timestamp": "2026-10-09T17:01:03.149Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-iFoYAM",
+    "filesScanned": 4931,
+    "summary": {
+      "critical": 1,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 1,
+      "suppressed": 0,
+      "total": 1
+    },
+    "healthy": false,
+    "issues": [
+      {
+        "severity": "critical",
+        "ruleId": "async-returns-pending-future",
+        "message": "@Async method returns a future that is still pending (CompletableFuture.supplyAsync(...)): Spring's interceptor calls get() on it on the executor thread, so the thread is held until it completes — the default executor saturates like a blocking call (measured: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/11651ca/cli/verify/async-pending-future/results/criteria.md#L15-L23)",
+        "location": "modules/kbase/src/main/java/com/bytedesk/kbase/llm_website/service/WebsiteCrawlerService.java:82"
+      }
+    ]
+  }
+}

@@ -7,6 +7,7 @@ import { checkKafka, checkKafkaSendTimeout } from './rules/kafka.js';
 import { checkTransactions } from './rules/transactions.js';
 import { checkObservability } from './rules/observability.js';
 import { checkReactorBlock } from './rules/reactor-block.js';
+import { checkAsyncPendingFuture } from './rules/async-pending-future.js';
 import { RULE_CATALOG } from './rule-catalog.js';
 import { printHeader, printFindings, printSummary, printJSON } from './reporter.js';
 import { applySuppressions } from './suppression.js';
@@ -38,6 +39,10 @@ export const RULES = [
   { id: 'transactions',       fn: checkTransactions },
   { id: 'observability',      fn: checkObservability },
   { id: 'reactor-block',      fn: checkReactorBlock },
+  // Opt-in (2.3.0): runs only with --rule async-returns-pending-future. Pre-registered
+  // consequence of the b0-corpus audit (validation/b0-corpus/AUDIT.md): 7 findings in 50
+  // repositories, below the 20 required to publish a precision; 3/7 true positives.
+  { id: 'async-returns-pending-future', fn: checkAsyncPendingFuture, optIn: true },
 ];
 
 // blocking-kafka has no detector of its own — checkBlocking() (blocking.js)
@@ -117,7 +122,7 @@ export async function runGuard(projectPath, opts = {}) {
   }
 
   const execId = RULE_FN_ALIASES[only] || only;
-  const rules = execId ? RULES.filter(r => r.id === execId) : RULES;
+  const rules = execId ? RULES.filter(r => r.id === execId) : RULES.filter(r => !r.optIn);
 
   const ignoredDirs = new Set(DEFAULT_IGNORED_DIRS);
   if (opts.ignore) {

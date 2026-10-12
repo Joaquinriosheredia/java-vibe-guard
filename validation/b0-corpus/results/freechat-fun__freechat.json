@@ -1,0 +1,24 @@
+{
+  "repo": "freechat-fun/freechat",
+  "commit": "75f72f31ab604cf85981710a5c16bfcc657c1900",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 223,
+  "scan": {
+    "timestamp": "2026-10-09T17:00:37.566Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-fRMHsq",
+    "filesScanned": 730,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

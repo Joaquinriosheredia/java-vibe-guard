@@ -1,0 +1,24 @@
+{
+  "repo": "Urunov/SpringBoot-Projects-FullStack",
+  "commit": "c54ae7651b629b7690027fd93625f9222922868e",
+  "status": "ok",
+  "ruleCommit": "8e94d7ce40037eaaff51ef89ac85f619cec74524",
+  "exitCode": 0,
+  "durationMs": 291,
+  "scan": {
+    "timestamp": "2026-10-12T04:49:51.832Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-rqNy97",
+    "filesScanned": 1140,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

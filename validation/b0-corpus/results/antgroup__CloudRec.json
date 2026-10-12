@@ -1,0 +1,24 @@
+{
+  "repo": "antgroup/CloudRec",
+  "commit": "ba3e682a6e396e4f1624c6796295b9c7191749c7",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 196,
+  "scan": {
+    "timestamp": "2026-10-09T17:01:45.546Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-3y75XR",
+    "filesScanned": 663,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

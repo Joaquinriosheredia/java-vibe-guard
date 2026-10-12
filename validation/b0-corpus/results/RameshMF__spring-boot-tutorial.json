@@ -1,0 +1,24 @@
+{
+  "repo": "RameshMF/spring-boot-tutorial",
+  "commit": "9cdb898b9ba819d8039314314390d2fb4774b0cf",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 88,
+  "scan": {
+    "timestamp": "2026-10-09T16:59:06.628Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-Flsbvk",
+    "filesScanned": 388,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

@@ -33,6 +33,8 @@ mkdir -p sample/src/main/java/demo
 for f in ReactorBlockAsyncDuplicateProbe BlockingFutureGetTruePositive KafkaTruePositive; do
   cp "$CLI_DIR/test-fixtures/$f.java" sample/src/main/java/demo/
 done
+# 2.3.0: @Async counts only with @EnableAsync in the scanned tree.
+cp "$CLI_DIR/test-fixtures/EnableAsyncConfig.java" sample/src/main/java/demo/
 
 [[ "$("${JVG[@]}" --version)" == "$EXPECTED_VERSION" ]] || fail "--version is not $EXPECTED_VERSION"
 help="$("${JVG[@]}" --help)"
@@ -87,6 +89,26 @@ const find = (m) => JSON.parse(fs.readFileSync(`${m}.json`, 'utf8')).issues
 const on = find('vt-on'), profile = find('vt-profile');
 if (on?.severity !== 'warning' || !on.message.includes('verify/blocking variant D')) throw new Error(`virtual threads in the base config: expected WARNING citing variant D, got ${JSON.stringify(on)}`);
 if (profile?.severity !== 'critical') throw new Error(`virtual threads only in a profile: expected CRITICAL, got ${JSON.stringify(profile)}`);
+EOF
+
+# 2.3.0: async-returns-pending-future is opt-in (only with --rule), and both it and
+# blocking's @Async anchor need @EnableAsync in the scanned tree (enable-async.js).
+mkdir ea-off ea-on
+cp "$CLI_DIR/test-fixtures/enable-async/AsyncWork.java" ea-off/
+cp "$CLI_DIR/test-fixtures/enable-async/AsyncWork.java" "$CLI_DIR/test-fixtures/enable-async/config/SpringEnableAsync.java" ea-on/
+for m in ea-off ea-on; do
+  for r in blocking async-returns-pending-future; do
+    "${JVG[@]}" "$m" --rule "$r" --format json > "$m-$r.json" || true
+  done
+done
+node - <<'EOF'
+const fs = require('fs');
+const n = f => JSON.parse(fs.readFileSync(f, 'utf8')).issues.length;
+if (JSON.parse(fs.readFileSync('scan.json', 'utf8')).issues.some(i => i.ruleId === 'async-returns-pending-future')) throw new Error('async-returns-pending-future ran without --rule (must be opt-in)');
+for (const r of ['blocking', 'async-returns-pending-future']) {
+  if (n(`ea-off-${r}.json`) !== 0) throw new Error(`${r} without @EnableAsync: expected 0 findings, got ${n(`ea-off-${r}.json`)}`);
+  if (n(`ea-on-${r}.json`) !== 1) throw new Error(`${r} with @EnableAsync: expected 1 finding, got ${n(`ea-on-${r}.json`)}`);
+}
 EOF
 
 # 2.2.0: reactor-block on the installed package, with the measured variants of
@@ -160,4 +182,4 @@ if [[ "${SMOKE_VERIFY:-0}" == "1" ]]; then
     || fail "--verify wrote build output inside the installed package"
 fi
 
-echo "SMOKE OK: $TARBALL installed in a clean project — version, help, scan, SARIF, explain, verify registry, virtual-threads severity, reactor-block measured shapes$([[ "${SMOKE_VERIFY:-0}" == "1" ]] && echo ', full --verify VIBE-001')"
+echo "SMOKE OK: $TARBALL installed in a clean project — version, help, scan, SARIF, explain, verify registry, virtual-threads severity, opt-in rule and @EnableAsync gate, reactor-block measured shapes$([[ "${SMOKE_VERIFY:-0}" == "1" ]] && echo ', full --verify VIBE-001')"

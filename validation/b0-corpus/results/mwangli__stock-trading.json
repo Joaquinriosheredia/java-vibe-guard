@@ -1,0 +1,24 @@
+{
+  "repo": "mwangli/stock-trading",
+  "commit": "f4d1281701974bc0fad53e941b2eac9b946809d5",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 78,
+  "scan": {
+    "timestamp": "2026-10-09T17:02:50.122Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-BUtg9l",
+    "filesScanned": 256,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

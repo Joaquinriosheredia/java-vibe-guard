@@ -1,0 +1,49 @@
+{
+  "repo": "osmandapp/OsmAnd-tools",
+  "commit": "5ce78b63e17c12c09e325e70dbda6cdcbe36a45f",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 1,
+  "durationMs": 457,
+  "scan": {
+    "timestamp": "2026-10-09T17:03:06.121Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-n2lpbj",
+    "filesScanned": 573,
+    "summary": {
+      "critical": 4,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 4,
+      "suppressed": 0,
+      "total": 4
+    },
+    "healthy": false,
+    "issues": [
+      {
+        "severity": "critical",
+        "ruleId": "async-returns-pending-future",
+        "message": "@Async method returns a future that is still pending (CompletableFuture.supplyAsync(...)): Spring's interceptor calls get() on it on the executor thread, so the thread is held until it completes — the default executor saturates like a blocking call (measured: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/11651ca/cli/verify/async-pending-future/results/criteria.md#L15-L23)",
+        "location": "java-tools/OsmAndServer/src/main/java/net/osmand/server/api/services/search/SearchTestService.java:239"
+      },
+      {
+        "severity": "critical",
+        "ruleId": "async-returns-pending-future",
+        "message": "@Async method returns a future that is still pending (CompletableFuture.supplyAsync(...)): Spring's interceptor calls get() on it on the executor thread, so the thread is held until it completes — the default executor saturates like a blocking call (measured: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/11651ca/cli/verify/async-pending-future/results/criteria.md#L15-L23)",
+        "location": "java-tools/OsmAndServer/src/main/java/net/osmand/server/api/services/search/SearchTestService.java:817"
+      },
+      {
+        "severity": "critical",
+        "ruleId": "async-returns-pending-future",
+        "message": "@Async method returns a future that is still pending (CompletableFuture.runAsync(...)): Spring's interceptor calls get() on it on the executor thread, so the thread is held until it completes — the default executor saturates like a blocking call (measured: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/11651ca/cli/verify/async-pending-future/results/criteria.md#L15-L23)",
+        "location": "java-tools/OsmAndServer/src/main/java/net/osmand/server/api/services/search/SearchTestService.java:839"
+      },
+      {
+        "severity": "critical",
+        "ruleId": "async-returns-pending-future",
+        "message": "@Async method returns a future that is still pending (CompletableFuture.runAsync(...)): Spring's interceptor calls get() on it on the executor thread, so the thread is held until it completes — the default executor saturates like a blocking call (measured: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/11651ca/cli/verify/async-pending-future/results/criteria.md#L15-L23)",
+        "location": "java-tools/OsmAndServer/src/main/java/net/osmand/server/api/services/search/SearchTestService.java:916"
+      }
+    ]
+  }
+}

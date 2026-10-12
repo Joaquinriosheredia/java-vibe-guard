@@ -1,0 +1,306 @@
+{
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "ranAt": "2026-10-09T17:03:08.083Z",
+  "repos": [
+    {
+      "repo": "spring-projects/spring-framework",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 10380
+    },
+    {
+      "repo": "conductor-oss/conductor",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 1638
+    },
+    {
+      "repo": "dyc87112/SpringBoot-Learning",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 629
+    },
+    {
+      "repo": "ageerle/ruoyi-ai",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 1579
+    },
+    {
+      "repo": "oracle-devrel/oracle-ai-developer-hub",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 176
+    },
+    {
+      "repo": "vector4wang/spring-boot-quick",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 820
+    },
+    {
+      "repo": "RameshMF/spring-boot-tutorial",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 388
+    },
+    {
+      "repo": "javahongxi/whatsmars",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 759
+    },
+    {
+      "repo": "tabby-sec/tabby",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 81
+    },
+    {
+      "repo": "Hello-hao/Tbed",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 158
+    },
+    {
+      "repo": "cBioPortal/cbioportal",
+      "status": "ok",
+      "findings": 1,
+      "filesScanned": 1425
+    },
+    {
+      "repo": "bytechefhq/bytechef",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 8713
+    },
+    {
+      "repo": "houko/SpringBootUnity",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 300
+    },
+    {
+      "repo": "dunwu/spring-tutorial",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 1257
+    },
+    {
+      "repo": "spring-projects/spring-data-commons",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 1126
+    },
+    {
+      "repo": "ls1intum/Artemis",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 5474
+    },
+    {
+      "repo": "Grashjs/cmms",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 1043
+    },
+    {
+      "repo": "Urunov/SpringBoot-Projects-FullStack",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 1140
+    },
+    {
+      "repo": "DataDog/dd-trace-java",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 7567
+    },
+    {
+      "repo": "weiguangli-io/rydr",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 435
+    },
+    {
+      "repo": "Harries/springboot-demo",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 2263
+    },
+    {
+      "repo": "freechat-fun/freechat",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 730
+    },
+    {
+      "repo": "nysenate/OpenLegislation",
+      "status": "ok",
+      "findings": 1,
+      "filesScanned": 1048
+    },
+    {
+      "repo": "Bytedesk/bytedesk",
+      "status": "ok",
+      "findings": 1,
+      "filesScanned": 4931
+    },
+    {
+      "repo": "9tigerio/db2rest",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 420
+    },
+    {
+      "repo": "AlanBinu007/Spring-Boot-Advanced-Projects",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 649
+    },
+    {
+      "repo": "cool-team-official/cool-admin-java",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 245
+    },
+    {
+      "repo": "box/mojito",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 1896
+    },
+    {
+      "repo": "dhis2/dhis2-core",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 6913
+    },
+    {
+      "repo": "apache/syncope",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 4956
+    },
+    {
+      "repo": "PacktPublishing/Hands-On-Reactive-Programming-in-Spring-5",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 333
+    },
+    {
+      "repo": "dunwu/spring-boot-tutorial",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 730
+    },
+    {
+      "repo": "FAForever/downlords-faf-client",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 945
+    },
+    {
+      "repo": "openl-tablets/openl-tablets",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 5149
+    },
+    {
+      "repo": "antgroup/CloudRec",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 663
+    },
+    {
+      "repo": "cmlbeliever/SpringBootLearning",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 281
+    },
+    {
+      "repo": "zhayinggang/ktv-home",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 228
+    },
+    {
+      "repo": "IYque/Iyque-SCRM",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 386
+    },
+    {
+      "repo": "tuyucheng7/taketoday-tutorial4j",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 16695
+    },
+    {
+      "repo": "NHA-ABDM/UHI",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 930
+    },
+    {
+      "repo": "humenglover/yuemu",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 600
+    },
+    {
+      "repo": "mwangli/stock-trading",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 256
+    },
+    {
+      "repo": "heowc/SpringBootSample",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 381
+    },
+    {
+      "repo": "osswangxining/iotplatform",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 815
+    },
+    {
+      "repo": "GdeiAssistant/GdeiAssistant",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 785
+    },
+    {
+      "repo": "smart-doc-group/smart-doc-example-cn",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 308
+    },
+    {
+      "repo": "molgenis/molgenis",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 2857
+    },
+    {
+      "repo": "hexliulab/fund-analysis-agents",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 149
+    },
+    {
+      "repo": "osmandapp/OsmAnd-tools",
+      "status": "ok",
+      "findings": 4,
+      "filesScanned": 573
+    },
+    {
+      "repo": "hantsy/spring-puzzles",
+      "status": "ok",
+      "findings": 0,
+      "filesScanned": 771
+    }
+  ]
+}

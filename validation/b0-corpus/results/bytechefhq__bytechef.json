@@ -1,0 +1,24 @@
+{
+  "repo": "bytechefhq/bytechef",
+  "commit": "75a3c105a2202e0fdcc1882d2e496b2f6114acbf",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 669,
+  "scan": {
+    "timestamp": "2026-10-09T16:59:30.776Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-y2YurQ",
+    "filesScanned": 8713,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

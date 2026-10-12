@@ -1,0 +1,24 @@
+{
+  "repo": "dhis2/dhis2-core",
+  "commit": "91e022c3e288f0af25b98e788b55cf72db42dbf7",
+  "status": "ok",
+  "ruleCommit": "8e94d7ce40037eaaff51ef89ac85f619cec74524",
+  "exitCode": 0,
+  "durationMs": 533,
+  "scan": {
+    "timestamp": "2026-10-12T04:51:09.103Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-Hr3DQk",
+    "filesScanned": 6913,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

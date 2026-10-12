@@ -1,0 +1,24 @@
+{
+  "repo": "zhayinggang/ktv-home",
+  "commit": "9fa653ac1606e3a110b03718ceee88e9c2281187",
+  "status": "ok",
+  "ruleCommit": "cd85e78be1ae60d59bbb4817132b664a5b47f2cc",
+  "exitCode": 0,
+  "durationMs": 74,
+  "scan": {
+    "timestamp": "2026-10-09T17:01:48.605Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-tg0Ds0",
+    "filesScanned": 228,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}
