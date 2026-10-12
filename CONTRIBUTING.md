@@ -110,21 +110,15 @@ To keep the detection engine reliable, every rule requires a robust test suite c
 1. **Create fixtures**:
    - Add a file containing the anti-pattern under `cli/test-fixtures/` named `YourRuleTruePositive.java`.
    - Add a file containing safe variants of the same code structure under `cli/test-fixtures/` named `YourRuleFalsePositive.java`.
-2. **Register fixtures**: Open [cli/run-validation.js](file:///home/usuariojoaquin/java-vibe-guard/cli/run-validation.js) and add your rule to the `FIXTURES` array:
+2. **Register the expected findings** in [`cli/test/fixture-ledger.js`](cli/test/fixture-ledger.js): add one entry per fixture with the exact count per rule and severity. The ledger is the single source of truth for the contract, SARIF and baseline suites. A rule that runs only with `--rule` (opt-in) goes in `OPT_IN_LEDGER` instead.
    ```javascript
-   {
-     name: 'your-rule-name',
-     checkFn: checkYourRule,
-     files: [
-       { path: 'YourRuleTruePositive.java', expectedBug: true },
-       { path: 'YourRuleFalsePositive.java', expectedBug: false },
-     ]
-   }
+   'YourRuleTruePositive.java': { 'your-rule-name': { critical: 1 } },
    ```
-3. **Run validation tests**:
+   A `*FalsePositive.java` fixture that must produce no findings needs no entry: a fixture missing from the ledger is expected to produce zero. Never raise a number in the ledger to make a test pass; fix the rule, or record a known false positive in the fixture header (see the rules at the top of the file).
+3. **Run the test suites**:
    ```bash
    cd cli
-   node run-validation.js
+   npm test
    ```
 
 ### MCP Server Test Structure
