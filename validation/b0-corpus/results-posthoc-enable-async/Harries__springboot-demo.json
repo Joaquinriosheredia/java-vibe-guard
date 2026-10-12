@@ -1,0 +1,24 @@
+{
+  "repo": "Harries/springboot-demo",
+  "commit": "1580f61ca3264e4617c475b3dfafffbe536a00cc",
+  "status": "ok",
+  "ruleCommit": "8e94d7ce40037eaaff51ef89ac85f619cec74524",
+  "exitCode": 0,
+  "durationMs": 243,
+  "scan": {
+    "timestamp": "2026-10-12T04:50:28.157Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-slXSh8",
+    "filesScanned": 2263,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

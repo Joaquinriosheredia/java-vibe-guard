@@ -1,0 +1,24 @@
+{
+  "repo": "hantsy/spring-puzzles",
+  "commit": "18d5dd9091a026aad40503da1e2cc59fdccb78a9",
+  "status": "ok",
+  "ruleCommit": "8e94d7ce40037eaaff51ef89ac85f619cec74524",
+  "exitCode": 0,
+  "durationMs": 108,
+  "scan": {
+    "timestamp": "2026-10-12T04:53:00.282Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-mhjS6u",
+    "filesScanned": 771,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}

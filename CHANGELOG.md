@@ -1,23 +1,46 @@
 # Changelog
 
-## Unreleased
+## 2.3.0
 
-- **New rule `async-returns-pending-future` (CRITICAL; WARNING with virtual threads),
-  in the default set.** An `@Async` method that returns a `CompletableFuture` which is
-  still pending holds its executor thread: Spring's interceptor calls `get()` on it on
-  that thread. Measured in the pre-registered experiment
-  [`cli/verify/async-pending-future`](cli/verify/async-pending-future/) (results at
-  `11651ca`): the default executor saturates like a blocking call, and the nested form
-  on the same executor starvation-deadlocks. The rule reports only futures that one file
-  proves pending (`supplyAsync`/`runAsync`, `…Async` stages, `WebClient…toFuture()`,
-  `HttpClient.sendAsync`, `KafkaTemplate.send`, a future completed only in a callback,
-  `allOf`, and `self.m()` through a self-injected proxy).
-- **What it does not detect yet, on purpose:** the measured shape itself
-  (`return downstream.call().thenApply(...)`, the pending future built in another bean)
-  and the deadlock between two beans (`return otherBean.asyncMethod()`). Both need
-  analysis across files, planned for a later version; until then they are false
-  negatives. Completed futures, `this.m()`, `Future`/`ListenableFuture` return types and
-  the AspectJ mode are not reported either.
+npm `2.3.0`, Action `@v2.3.0` / `@v2`. CLI only: the MCP server is unchanged, and its
+jar stays the one attached to the v2.0.0 release. No finding becomes more severe; the
+default scan reports the same or fewer findings.
+
+- **New rule `async-returns-pending-future`, opt-in: it runs only with
+  `--rule async-returns-pending-future`** (or `rule:` in the Action) and is not in the
+  default set. **Precision not conclusively measured:** 3/7 true positives (43 %, Wilson
+  95 % CI 16–75 %) in a pre-registered corpus of 50 repositories; n too small
+  ([`validation/b0-corpus/AUDIT.md`](validation/b0-corpus/AUDIT.md)). Fewer than the 20
+  findings the pre-registration required to publish a precision, so the rule stays out of
+  the default set, as pre-registered.
+  - What it detects: an `@Async` method that returns a `CompletableFuture` which is still
+    pending holds its executor thread, because Spring's interceptor calls `get()` on it on
+    that thread. Measured in the pre-registered experiment
+    [`cli/verify/async-pending-future`](cli/verify/async-pending-future/) (results at
+    `11651ca`): the default executor saturates like a blocking call, and the nested form
+    on the same executor starvation-deadlocks. The rule reports only futures that one file
+    proves pending (`supplyAsync`/`runAsync`, `…Async` stages, `WebClient…toFuture()`,
+    `HttpClient.sendAsync`, `KafkaTemplate.send`, a future completed only in a callback,
+    `allOf`, and `self.m()` through a self-injected proxy).
+  - What it does not detect yet, on purpose: the measured shape itself
+    (`return downstream.call().thenApply(...)`, the pending future built in another bean)
+    and the deadlock between two beans (`return otherBean.asyncMethod()`). Both need
+    analysis across files, planned for a later version; until then they are false
+    negatives. Completed futures, `this.m()`, `Future`/`ListenableFuture` return types and
+    the AspectJ mode are not reported either.
+  - Known limits: an own executor that uses virtual threads (an `AsyncConfigurer`
+    returning `Executors.newVirtualThreadPerTaskExecutor()`) is not detected, so the
+    severity can be overstated; when `supplyAsync`/`runAsync` use the same pool as the
+    `@Async` method, the message says saturation where the risk is the deadlock.
+- **`@Async` needs `@EnableAsync` in the scanned tree**, in `blocking` (its `@Async`
+  anchor) and in `async-returns-pending-future`. Without `@EnableAsync` or
+  `<task:annotation-driven/>` Spring does not intercept `@Async`, and the method runs on
+  the caller's thread. Any file or module of the scanned tree counts; one outside it (a
+  jar, another repository, a scan of a single module) is not seen, and those `@Async`
+  methods are not reported. `@Scheduled`, `@EventListener` and `@KafkaListener` are
+  unaffected. Fewer findings only. This change was made after reading the corpus results
+  (its 4 false positives had no `@EnableAsync`); the corpus figure with it is published
+  apart in the audit, marked post hoc, and does not replace the pre-registered precision.
 - **`blocking`: `@Async` is an anchor only when it is Spring's**
   (`org.springframework.scheduling.annotation.Async`, imported, imported with `.*`, or
   written fully qualified). Another library's `@Async` (jcabi-aspects, found in

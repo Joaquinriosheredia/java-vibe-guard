@@ -63,3 +63,26 @@ published precision figure.
 - **Coverage:** 50 repositories with Spring `@Async` and `CompletableFuture` in the same
   file produced 7 findings; the corpus does not measure false negatives (N5 and M9 are
   out of v1 by design).
+
+## Post hoc: the corpus again, with the `@EnableAsync` check (not pre-registered)
+
+**This is not a measured precision and does not replace the 3/7 above.** The check was
+designed after reading these results, to remove exactly the cause of the 4 false
+positives, so the same corpus cannot test it.
+
+- **Change:** (2026-10-12, `8e94d7c`, `cli/src/rules/enable-async.js`). The rule reports
+  nothing when the scanned tree has no `@EnableAsync` (Spring's, imported or qualified) or
+  `<task:annotation-driven/>` in Spring's task namespace. `blocking` applies the same check
+  to its `@Async` anchor.
+- **Run:** `run-posthoc-enable-async.mjs`. It is `run.mjs` with another output directory:
+  same `corpus.json`, same pinned checkouts, same command. Rule code at `8e94d7c`.
+  Results are in `results-posthoc-enable-async/`; the pre-registered `results/` is
+  untouched.
+- **Outcome:** 50/50 repositories scanned, 0 errors, 102,974 files (as in the
+  pre-registered run).
+  - **3 findings:** Bytedesk, cBioPortal and OpenLegislation, at the same locations and
+    severities as findings 1–3 above.
+  - The 4 OsmAnd-tools findings (4–7) are gone. No other finding appeared or disappeared.
+- **Arithmetic only:** 3/3, Wilson 95 % 44 %–100 %. Published as what the change does on
+  this corpus, not as the rule's precision. The notes on findings 1 and 2 (severity,
+  impact) still apply.

@@ -1,0 +1,24 @@
+{
+  "repo": "osswangxining/iotplatform",
+  "commit": "864e9e39b4ab0cd678226ae77100fb3e7e0382ac",
+  "status": "ok",
+  "ruleCommit": "8e94d7ce40037eaaff51ef89ac85f619cec74524",
+  "exitCode": 0,
+  "durationMs": 125,
+  "scan": {
+    "timestamp": "2026-10-12T04:52:45.820Z",
+    "projectPath": "/tmp/java-vibe-guard-validate-public-25SxXp",
+    "filesScanned": 815,
+    "summary": {
+      "critical": 0,
+      "major": 0,
+      "warning": 0,
+      "info": 0,
+      "reported": 0,
+      "suppressed": 0,
+      "total": 0
+    },
+    "healthy": true,
+    "issues": []
+  }
+}
