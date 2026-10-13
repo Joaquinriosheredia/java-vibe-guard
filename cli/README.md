@@ -173,12 +173,21 @@ Options:
   --rule <name>      Run only one rule: blocking | blocking-kafka | kafka | kafka-send-timeout |
                      layers | observability | reactor-block | async-returns-pending-future |
                      transactions (async-returns-pending-future runs only when named here)
+  --skip-rule <ids>  Comma-separated rule ids whose findings are not reported (e.g. observability)
   --ignore <dirs>    Comma-separated directories to exclude (e.g. labs,demos,test)
   --verbose          List suppressed findings with their rule, location and justification
   --baseline         Write/regenerate vibeguard-baseline.json from the current scan and exit
   --no-color         Disable colored output
   -h, --help         display help for command
 ```
+
+### Skipping rules
+
+```bash
+java-vibe-guard . --skip-rule observability
+```
+
+Findings of the named rules are not reported, in any format, and do not count for the exit code. `--rule X --skip-rule X` is an error. Skipping `reactor-block` reports a reactive `.block()` under `blocking` instead, the same as `--rule blocking`.
 
 ### Excluding directories
 

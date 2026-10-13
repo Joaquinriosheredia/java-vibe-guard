@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **New option `--skip-rule <ids>`:** comma-separated rule ids whose findings are not
+  reported, in any format (text, JSON, SARIF), and do not count for the exit code.
+  `--rule X --skip-rule X` and unknown ids are errors (exit 1). Skipping `reactor-block`
+  reports a reactive `.block()` under `blocking`, as `--rule blocking` already does.
+  Nothing changes without the option. vibe-guard (the wrapper) will pass
+  `--skip-rule observability` by default (audit trial of 2026-10-12: 3,856 `observability`
+  warnings in YunaiV/ruoyi-vue-pro).
+
 ## 2.3.0
 
 npm `2.3.0`, Action `@v2.3.0` / `@v2`. CLI only: the MCP server is unchanged, and its

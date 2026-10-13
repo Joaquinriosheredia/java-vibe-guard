@@ -121,8 +121,24 @@ export async function runGuard(projectPath, opts = {}) {
     return 1;
   }
 
+  // --skip-rule drops findings by their emitted rule id, before the reactor-block
+  // dedup: with reactor-block skipped, a .block() is reported under blocking, the
+  // same as with --rule blocking alone.
+  const skip = new Set((opts.skipRule ?? '').split(',').map(r => r.trim().toLowerCase()).filter(Boolean));
+  const unknownSkip = [...skip].filter(r => !VALID_RULE_IDS.includes(r));
+  if (unknownSkip.length > 0) {
+    console.error(`Unknown rule in --skip-rule: "${unknownSkip.join('", "')}". Valid: ${VALID_RULE_IDS.join(', ')}`);
+    return 1;
+  }
+  if (only && skip.has(only)) {
+    console.error(`--rule ${only} and --skip-rule ${only} contradict each other`);
+    return 1;
+  }
+
   const execId = RULE_FN_ALIASES[only] || only;
-  const rules = execId ? RULES.filter(r => r.id === execId) : RULES.filter(r => !r.optIn);
+  const rules = (execId ? RULES.filter(r => r.id === execId) : RULES.filter(r => !r.optIn))
+    // A detector is not run only when every rule id it emits is skipped.
+    .filter(r => !(skip.has(r.id) && Object.entries(RULE_FN_ALIASES).every(([alias, id]) => id !== r.id || skip.has(alias))));
 
   const ignoredDirs = new Set(DEFAULT_IGNORED_DIRS);
   if (opts.ignore) {
@@ -165,7 +181,7 @@ export async function runGuard(projectPath, opts = {}) {
   // than detector implementation. If a detector emits an
   // unexpected ruleId, that finding will not match the requested
   // filter.
-  const dedupedFindings = dropFindingsShadowedByReactorBlock(allFindings);
+  const dedupedFindings = dropFindingsShadowedByReactorBlock(allFindings.filter(f => !skip.has(f.rule)));
   const selectedFindings = only ? dedupedFindings.filter(f => f.rule === only) : dedupedFindings;
 
   const decorated = applySuppressions(selectedFindings, fileContexts, config);

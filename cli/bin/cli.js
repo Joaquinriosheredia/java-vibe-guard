@@ -23,6 +23,7 @@ program
   )
   .option('--json', 'Output results as JSON (compatibility alias for --format json)')
   .option('--rule <name>', `Run only one rule: ${Object.keys(RULE_CATALOG).join(' | ')} (async-returns-pending-future runs only when named here)`)
+  .option('--skip-rule <ids>', 'Comma-separated rule ids whose findings are not reported (e.g. observability)')
   .option('--ignore <dirs>', 'Comma-separated directories to exclude (e.g. labs,demos,test)')
   .option('--verbose', 'List suppressed findings with their rule, location, suppressedBy, and justification')
   .option('--baseline', 'Write/regenerate vibeguard-baseline.json from the current scan and exit (no report, no exit code by criticals)')
