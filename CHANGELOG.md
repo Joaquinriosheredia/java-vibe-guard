@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **`kafka-send-timeout`: the message no longer says the thread is blocked "indefinitely".**
+  An untimed `.get()` waits until the producer gives up: up to `delivery.timeout.ms`
+  (120 s with the Kafka client defaults), plus up to `max.block.ms` (60 s by default)
+  inside `send()` while metadata is unavailable. The message and the rule description now
+  say so. Detection, severity and evidence are unchanged; only the text differs (found in
+  the vibe-guard audit trial of 2026-10-12, YunaiV/ruoyi-vue-pro).
+
 ## 2.3.0
 
 npm `2.3.0`, Action `@v2.3.0` / `@v2`. CLI only: the MCP server is unchanged, and its

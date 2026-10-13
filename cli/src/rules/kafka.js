@@ -117,7 +117,9 @@ function deduplicate(findings) {
 // kafka-send-timeout — evidence: Java-Production-Labs SagaOrderService.java:45
 // (commit 01cee18) and StreamController.java:53 (commit dcb0358), both
 // `<kafkaTemplate>.send(...).get()` with no timeout, blocking the calling
-// thread indefinitely when the broker is slow/unavailable. Lab 08's benchmark
+// thread until the producer gives up (delivery.timeout.ms, 120 s by default,
+// plus max.block.ms, 60 s, while metadata is unavailable) when the broker is
+// slow/unavailable — not forever: the bound comes from the producer config. Lab 08's benchmark
 // (already cited in this repo's README) measured a 60% request failure rate
 // under this exact pattern during a broker outage.
 //
@@ -230,7 +232,7 @@ export function checkKafkaSendTimeout(fileContexts) {
         findings.push({
           severity: 'critical',
           rule: 'kafka-send-timeout',
-          message: 'Kafka send().get() without timeout — blocks the calling thread indefinitely if the broker is slow or unavailable; use .get(timeout, TimeUnit) or handle the future asynchronously',
+          message: 'Kafka send().get() without timeout — if the broker is slow or unavailable, the calling thread stays blocked until the producer gives up: up to delivery.timeout.ms (120 s with the Kafka client defaults), plus up to max.block.ms (60 s by default) inside send() while metadata is unavailable; use .get(timeout, TimeUnit) or handle the future asynchronously',
           location: `${relativePath}:${i + 1}`,
         });
       }

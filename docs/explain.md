@@ -77,7 +77,9 @@ every distinct severity that rule id's `findings.push(...)` call sites in
   `SagaOrderService.java:45` (commit `01cee18`) and
   `StreamController.java:53` (commit `dcb0358`), both a
   `.send(...).get()` chain with no timeout, blocking the calling thread
-  indefinitely under broker slowness/unavailability.
+  under broker slowness/unavailability until the producer gives up
+  (`delivery.timeout.ms`, 120 s by default, plus `max.block.ms`, 60 s,
+  while metadata is unavailable).
 - `layers`: always `major` (`cli/src/rules/layers.js:28,38`).
 - `observability`: always `warning` (`cli/src/rules/observability.js:54`).
 - `reactor-block`: always `critical` (`cli/src/rules/reactor-block.js`, two
