@@ -24,6 +24,7 @@ import { execFileSync } from 'child_process';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { RULE_CATALOG } from '../src/rule-catalog.js';
+import { checkKafkaSendTimeout } from '../src/rules/kafka.js';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const THIS_REPO = 'Joaquinriosheredia/java-vibe-guard';
@@ -163,6 +164,17 @@ test('the nested form: deadlock from 20 tasks/s, none at 10', () =>
   assert(/0 completions in the last 10 s of every run at 20, 36, 60 and 120 tasks\/s/.test(apfText) && /at 10 tasks\/s no run deadlocked/.test(apfText), apfText));
 test('says what v1 does not detect and why', () =>
   assert(/NOT detected in this version/.test(apf.full) && /analysis across files/.test(apf.full), apf.full));
+
+console.log('\nkafka-send-timeout: the message states the producer bound, not "indefinitely" (ensayo 2026-10-12)');
+const kst = RULE_CATALOG['kafka-send-timeout'];
+const kstFindings = checkKafkaSendTimeout([{
+  filePath: 'S.java', relativePath: 'S.java', fileName: 'S.java',
+  lines: ['import org.springframework.kafka.core.KafkaTemplate;', 'class S { void f() throws Exception { kafka.send("t", "v").get(); } }'],
+}]);
+for (const [what, text] of [['catalog full text', kst.full], ['emitted message', kstFindings[0]?.message ?? '']]) {
+  test(`${what}: no "indefinitely"; names delivery.timeout.ms (120 s) and max.block.ms (60 s)`, () =>
+    assert(!/indefinite|forever/i.test(text) && /delivery\.timeout\.ms \(120 s/.test(text) && /max\.block\.ms \(60 s/.test(text), text));
+}
 
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`📊 Results: ${passed} passed, ${failed} failed`);

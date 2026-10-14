@@ -98,7 +98,7 @@ const fixtureFindings = [
   finding({
     rule: 'kafka-send-timeout',
     severity: 'critical',
-    message: 'Kafka send().get() without timeout — blocks the calling thread indefinitely if the broker is slow or unavailable; use .get(timeout, TimeUnit) or handle the future asynchronously',
+    message: 'Kafka send().get() without timeout — if the broker is slow or unavailable, the calling thread stays blocked until the producer gives up: up to delivery.timeout.ms (120 s with the Kafka client defaults), plus up to max.block.ms (60 s by default) inside send() while metadata is unavailable; use .get(timeout, TimeUnit) or handle the future asynchronously',
     location: 'src/main/java/com/example/saga/SagaOrderService.java:45',
   }),
   finding({
