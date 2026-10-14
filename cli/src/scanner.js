@@ -37,7 +37,9 @@ export const RULES = [
   { id: 'kafka',              fn: checkKafka },
   { id: 'kafka-send-timeout', fn: checkKafkaSendTimeout },
   { id: 'transactions',       fn: checkTransactions },
-  { id: 'observability',      fn: checkObservability },
+  // Opt-in (2.4.0): runs only with --rule observability. Noise: 3,856 warnings in
+  // YunaiV/ruoyi-vue-pro in the vibe-guard audit trial of 2026-10-12.
+  { id: 'observability',      fn: checkObservability, optIn: true },
   { id: 'reactor-block',      fn: checkReactorBlock },
   // Opt-in (2.3.0): runs only with --rule async-returns-pending-future. Pre-registered
   // consequence of the b0-corpus audit (validation/b0-corpus/AUDIT.md): 7 findings in 50
@@ -54,25 +56,30 @@ export const RULES = [
 export const RULE_FN_ALIASES = { 'blocking-kafka': 'blocking' };
 
 // blocking.js and reactor-block.js both match a reactive .block()/
-// .blockFirst()/.blockLast() — e.g. Mono.block() inside an @Async method of a
-// @RestController reported the same call twice (java-vibe-guard-demo,
-// ReactiveController.java:14). When both fire on the same location for that
-// same call, only reactor-block (the more specific diagnosis) is kept. Other
-// blocking findings on that line (Thread.sleep(), .join(), Future.get()) are
-// a different call and are never dropped. Only applies when both rules ran:
-// `--rule blocking` alone still reports the .block() under blocking.
+// .blockFirst()/.blockLast() — e.g. Mono.block() inside an @Scheduled method of a
+// @Service reported the same call twice. When both fire on the same location for that
+// same call, one is kept (2.4.0):
+//   - reactor-block CRITICAL (evidence of a Reactor thread): it is the more specific
+//     diagnosis, the blocking finding is dropped;
+//   - reactor-block WARNING (thread unknown to reactor-block): blocking knows the thread
+//     from its anchor (@Scheduled, @Async, @EventListener, @KafkaListener), so the
+//     reactor-block warning is dropped and blocking's severity is never lowered.
+// Other blocking findings on that line (Thread.sleep(), .join(), Future.get()) are a
+// different call and are never dropped. Only applies when both rules ran: `--rule
+// blocking` alone still reports the .block() under blocking.
 const REACTIVE_BLOCKING_MESSAGE_RE = /^blocking \.(block|blockFirst|blockLast)\(\)/;
 
 export function dropFindingsShadowedByReactorBlock(findings) {
-  const reactorLocations = new Set(
-    findings.filter(f => f.rule === 'reactor-block').map(f => f.location)
-  );
-  if (reactorLocations.size === 0) return findings;
-  return findings.filter(f =>
-    !((f.rule === 'blocking' || f.rule === 'blocking-kafka')
-      && reactorLocations.has(f.location)
-      && REACTIVE_BLOCKING_MESSAGE_RE.test(f.message))
-  );
+  const reactor = findings.filter(f => f.rule === 'reactor-block');
+  if (reactor.length === 0) return findings;
+  const isReactiveBlocking = f => (f.rule === 'blocking' || f.rule === 'blocking-kafka') && REACTIVE_BLOCKING_MESSAGE_RE.test(f.message);
+  const criticalAt = new Set(reactor.filter(f => f.severity === 'critical').map(f => f.location));
+  const blockingAt = new Set(findings.filter(isReactiveBlocking).map(f => f.location));
+  return findings.filter(f => {
+    if (isReactiveBlocking(f)) return !criticalAt.has(f.location);
+    if (f.rule === 'reactor-block' && f.severity !== 'critical') return !blockingAt.has(f.location);
+    return true;
+  });
 }
 
 const VALID_RULE_IDS = Object.keys(RULE_CATALOG);
@@ -121,8 +128,24 @@ export async function runGuard(projectPath, opts = {}) {
     return 1;
   }
 
+  // --skip-rule drops findings by their emitted rule id, before the reactor-block
+  // dedup: with reactor-block skipped, a .block() is reported under blocking, the
+  // same as with --rule blocking alone.
+  const skip = new Set((opts.skipRule ?? '').split(',').map(r => r.trim().toLowerCase()).filter(Boolean));
+  const unknownSkip = [...skip].filter(r => !VALID_RULE_IDS.includes(r));
+  if (unknownSkip.length > 0) {
+    console.error(`Unknown rule in --skip-rule: "${unknownSkip.join('", "')}". Valid: ${VALID_RULE_IDS.join(', ')}`);
+    return 1;
+  }
+  if (only && skip.has(only)) {
+    console.error(`--rule ${only} and --skip-rule ${only} contradict each other`);
+    return 1;
+  }
+
   const execId = RULE_FN_ALIASES[only] || only;
-  const rules = execId ? RULES.filter(r => r.id === execId) : RULES.filter(r => !r.optIn);
+  const rules = (execId ? RULES.filter(r => r.id === execId) : RULES.filter(r => !r.optIn))
+    // A detector is not run only when every rule id it emits is skipped.
+    .filter(r => !(skip.has(r.id) && Object.entries(RULE_FN_ALIASES).every(([alias, id]) => id !== r.id || skip.has(alias))));
 
   const ignoredDirs = new Set(DEFAULT_IGNORED_DIRS);
   if (opts.ignore) {
@@ -165,7 +188,7 @@ export async function runGuard(projectPath, opts = {}) {
   // than detector implementation. If a detector emits an
   // unexpected ruleId, that finding will not match the requested
   // filter.
-  const dedupedFindings = dropFindingsShadowedByReactorBlock(allFindings);
+  const dedupedFindings = dropFindingsShadowedByReactorBlock(allFindings.filter(f => !skip.has(f.rule)));
   const selectedFindings = only ? dedupedFindings.filter(f => f.rule === only) : dedupedFindings;
 
   const decorated = applySuppressions(selectedFindings, fileContexts, config);

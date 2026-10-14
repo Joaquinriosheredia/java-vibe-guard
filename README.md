@@ -203,7 +203,7 @@ Full options:
 - uses: Joaquinriosheredia/java-vibe-guard@v2
   with:
     path: '.'
-    rule: ''             # blank = default set (async-returns-pending-future is opt-in: name it here); or: blocking | blocking-kafka | kafka | kafka-send-timeout | layers | transactions | observability | reactor-block | async-returns-pending-future
+    rule: ''             # blank = default set (async-returns-pending-future and observability are opt-in: name them here); or: blocking | blocking-kafka | kafka | kafka-send-timeout | layers | transactions | observability | reactor-block | async-returns-pending-future
     ignore: 'labs,demo'  # comma-separated dirs to skip
     fail-on: 'critical'  # critical | never
     upload-report: 'true'  # attach JSON report as artifact

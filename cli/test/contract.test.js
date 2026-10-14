@@ -8,7 +8,7 @@
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { mkdtempSync, copyFileSync, rmSync, writeFileSync, mkdirSync, cpSync } from 'fs';
+import { mkdtempSync, copyFileSync, rmSync, writeFileSync, mkdirSync, cpSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { ledgerTotals, breakdownFromJson, diffAgainstLedger, OPT_IN_LEDGER } from './fixture-ledger.js';
 import { applySuppressions } from '../src/suppression.js';
@@ -367,7 +367,8 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
   const json = runOnFixture('ReactorBlockTruePositive.java', 'reactor-block');
   assert(json.issues.length === 4, 'ReactorBlockTruePositive.java produces exactly 4 findings (one per blocking pattern)');
   assert(json.issues.every(i => i.ruleId === 'reactor-block'), 'all ReactorBlockTruePositive findings have ruleId "reactor-block"');
-  assert(json.issues.every(i => i.severity === 'critical'), 'all ReactorBlockTruePositive findings are critical');
+  // 2.4.0 (Phase 1 (c)): plain statements of a @Service, no evidence of a Reactor thread.
+  assert(json.issues.every(i => i.severity === 'warning'), 'all ReactorBlockTruePositive findings are warnings (thread unknown, 2.4.0)');
 }
 {
   // Ported from mcp-server's ReactorBlockingFalsePositive.java: @PostConstruct,
@@ -380,22 +381,75 @@ console.log('\n📋 Test 5: fixture-by-fixture detection');
   // Precision (verify/reactor-block variants A4 and C): only the exact measured shapes of
   // .block() are skipped; everything else in these modules is still reported.
   const { stdout } = run(['--json', '--rule', 'reactor-block', join(FIXTURES, 'reactor-block-precision')]);
-  const got = JSON.parse(stdout).issues.map(i => i.location).sort();
+  const got = JSON.parse(stdout).issues.map(i => `${i.severity} ${i.location}`).sort();
   const want = [
-    'both/src/main/java/demo/MixedController.java:12',        // MVC + WebFlux: stack unknown
-    'mvc-only/src/main/java/demo/MvcController.java:35',      // operator after subscribeOn(parallel())
-    'mvc-only/src/main/java/demo/MvcController.java:40',      // .toFuture().get(): not measured on MVC
-    'mvc-only/src/main/java/demo/MvcController.java:45',      // .blockFirst(): not measured on MVC
-    'mvc-only/src/main/java/demo/MvcService.java:12',         // Service: callers unknown
-    'webflux/src/main/java/demo/ReactiveController.java:21',  // plain .block() on the event loop
-    'webflux/src/main/java/demo/ReactiveController.java:37',  // subscribeOn(parallel())
-    'webflux/src/main/java/demo/ReactiveController.java:43',  // publishOn after boundedElastic
-    'webflux/src/main/java/demo/ReactiveController.java:50',  // .blockFirst(): not measured on boundedElastic
+    'critical both/src/main/java/demo/MixedController.java:12',        // MVC + WebFlux: stack unknown, handler
+    'critical mvc-only/src/main/java/demo/MvcController.java:35',      // operator after subscribeOn(parallel())
+    'warning mvc-only/src/main/java/demo/MvcController.java:41',       // .toFuture().get(): servlet worker (2.4.0)
+    'warning mvc-only/src/main/java/demo/MvcController.java:47',       // .blockFirst(): servlet worker (2.4.0)
+    'warning mvc-only/src/main/java/demo/MvcService.java:14',          // Service: callers unknown (2.4.0)
+    'critical webflux/src/main/java/demo/ReactiveController.java:21',  // plain .block() on the event loop
+    'critical webflux/src/main/java/demo/ReactiveController.java:37',  // subscribeOn(parallel())
+    'warning webflux/src/main/java/demo/ReactiveController.java:45',   // publishOn after boundedElastic (2.4.0)
+    'warning webflux/src/main/java/demo/ReactiveController.java:54',   // .blockFirst() on boundedElastic (2.4.0)
   ].sort();
   assert(JSON.stringify(got) === JSON.stringify(want), `reactor-block precision fixtures: expected ${want.join(', ')}; got ${got.join(', ')}`);
-  for (const skipped of ['MvcController.java:22', 'MvcController.java:28', 'ReactiveController.java:26', 'ReactiveController.java:31']) {
+  for (const skipped of ['MvcController.java:21', 'MvcController.java:27', 'ReactiveController.java:26', 'ReactiveController.java:31']) {
     assert(!got.some(l => l.endsWith(skipped)), `measured-safe shape at ${skipped} is not reported`);
   }
+}
+{
+  // 2.4.0 thread context (Phase 1 (c), design approved 2026-10-14): CRITICAL only with
+  // evidence of a Reactor thread in the file; unknown thread -> WARNING, never silence;
+  // known non-Reactor Spring contexts of the same method -> not reported.
+  const CTX = join(FIXTURES, 'reactor-block-context');
+  const { stdout } = run(['--json', '--rule', 'reactor-block', CTX]);
+  const got = JSON.parse(stdout).issues.map(i => `${i.severity} ${i.location.replace('webflux/src/main/java/demo/', '')}`).sort();
+  const want = [
+    'critical HandlerController.java:21',   // (2) WebFlux handler: .block()
+    'critical HandlerController.java:27',   // (4) WebFlux handler: .toFuture().get()
+    'critical HandlerController.java:34',   // fromCallable, no subscribeOn, in a handler
+    'warning HandlerController.java:39',    // private helper: not a handler
+    'critical OperatorService.java:25',     // (1) map callback (parallel runOn)
+    'critical OperatorService.java:33',     // (1) multi-line block lambda, nested if
+    'critical OperatorService.java:41',     // (1) nested call inside the lambda
+    'critical OperatorService.java:48',     // (1) anonymous class passed to map
+    'critical OperatorService.java:55',     // (1) subscribe consumer
+    'critical OperatorService.java:62',     // (4) .toFuture().get() in an operator
+    'critical OperatorService.java:71',     // fromCallable + subscribeOn(parallel())
+    'warning OperatorService.java:77',      // statement of a @Service
+    'warning OperatorService.java:82',      // java.util.stream lambda: inline
+    'warning OperatorService.java:87',      // lambda of a constructor (QueueItem)
+    'warning OperatorService.java:94',      // anonymous class evaluated later
+    'warning OperatorService.java:101',     // fromCallable, no scheduler, not a handler
+    'warning OperatorService.java:106',     // private helper
+    'critical RouterHandlers.java:23',      // (3) ServerRequest
+    'critical RouterHandlers.java:30',      // (3) ServerWebExchange, signature over two lines
+    'warning StartupLifecycle.java:20',     // stop(): not excluded
+    'warning StartupReadyListener.java:20', // private helper of a listener
+    'warning StartupRunner.java:18',        // other method of a runner
+  ].sort();
+  assert(JSON.stringify(got) === JSON.stringify(want), `reactor-block context fixtures:\n    expected ${want.join(', ')}\n    got      ${got.join(', ')}`);
+  // Exact equality: the excluded methods (CommandLineRunner/ApplicationRunner.run,
+  // SmartLifecycle.start, ready/refreshed listeners, @EventListener(ApplicationReadyEvent),
+  // @Async with @EnableAsync) are absent.
+
+  // @Async counts only with @EnableAsync in the scanned tree (same rule as blocking).
+  const asyncFile = join(CTX, 'webflux/src/main/java/demo/AsyncWorker.java');
+  const ctx = (path) => ({ filePath: path, relativePath: path.split('/').pop(), lines: readFileSync(path, 'utf8').split('\n') });
+  const withConfig = checkReactorBlock([ctx(asyncFile), ctx(join(CTX, 'webflux/src/main/java/demo/AsyncConfig.java'))]);
+  assert(withConfig.length === 0, `@Async + @EnableAsync in the tree: not reported: got ${withConfig.length}`);
+  const without = checkReactorBlock([ctx(asyncFile)]);
+  assert(without.length === 1 && without[0].severity === 'warning', `@Async with no @EnableAsync (inert): a warning: got ${without.map(f => f.severity).join(',') || 'none'}`);
+
+  // Criterion 10: the warning separates detection, impact and reproduction, and does not
+  // claim a measured effect for its own case.
+  const w = JSON.parse(stdout).issues.find(i => i.severity === 'warning' && i.message.includes(".block()'"));
+  assert(/Detection: .*Impact: .*Reproduction: not available/.test(w.message), 'warning message has Detection / Impact / Reproduction, in that order');
+  assert(/cannot see/.test(w.message) && /no evidence that it runs on one/.test(w.message), 'warning message says the thread is not visible');
+  assert(/if a Reactor thread .* runs it, it throws IllegalStateException on every call \(measured\)/.test(w.message), 'the measured impact is stated as conditional on a Reactor thread');
+  const c = JSON.parse(stdout).issues.filter(i => i.severity === 'critical');
+  assert(c.every(i => /operator|WebFlux handler|non-blocking Reactor scheduler/.test(i.message)), 'every critical message names its evidence of a Reactor thread');
 }
 {
   // The fixes the reactor-block messages recommend must not be flagged by reactor-block
@@ -1166,25 +1220,37 @@ console.log('\n📋 Test 18b: Future.get() on Future-typed receivers; .block() r
     rmSync(dir, { recursive: true, force: true });
   }
 
-  // Dedup: full rule set on the duplicate probe.
+  // 2.4.0: @Async with @EnableAsync is excluded from reactor-block (task executor), so the
+  // Mono.block() of the 0a duplicate probe is reported once, under blocking.
   const dupDir = mkdtempSync(join(tmpdir(), 'vibe-guard-fixture-'));
   try {
     copyFileSync(join(FIXTURES, 'ReactorBlockAsyncDuplicateProbe.java'), join(dupDir, 'ReactorBlockAsyncDuplicateProbe.java'));
     copyFileSync(join(FIXTURES, 'EnableAsyncConfig.java'), join(dupDir, 'EnableAsyncConfig.java'));
     const all = JSON.parse(run(['--json', dupDir]).stdout);
-    const at19 = all.issues.filter(i => i.location.endsWith(':19'));
-    assert(at19.length === 1 && at19[0].ruleId === 'reactor-block', `Mono.block() line 19 reported once, as reactor-block: got ${at19.map(i => i.ruleId).join(',') || 'none'}`);
-    const at20 = all.issues.filter(i => i.location.endsWith(':20'));
-    assert(at20.length === 1 && at20[0].ruleId === 'blocking', 'Thread.sleep() on line 20 is a different call — still reported under blocking');
+    const at23 = all.issues.filter(i => i.location.endsWith(':23'));
+    assert(at23.length === 1 && at23[0].ruleId === 'blocking' && at23[0].severity === 'critical', `Mono.block() line 23 reported once, as blocking critical: got ${at23.map(i => i.ruleId).join(',') || 'none'}`);
+    const at24 = all.issues.filter(i => i.location.endsWith(':24'));
+    assert(at24.length === 1 && at24[0].ruleId === 'blocking', 'Thread.sleep() on line 24 is a different call — still reported under blocking');
     assert(all.summary.reported === 2, `2 findings in total: got ${all.summary.reported}`);
+  } finally {
+    rmSync(dupDir, { recursive: true, force: true });
+  }
 
-    const onlyBlocking = JSON.parse(run(['--json', '--rule', 'blocking', dupDir]).stdout);
+  // 2.4.0 dedup: one finding per .block(), and never a lower severity than blocking's.
+  const schedDir = mkdtempSync(join(tmpdir(), 'vibe-guard-fixture-'));
+  try {
+    copyFileSync(join(FIXTURES, 'ReactorBlockScheduledDuplicateProbe.java'), join(schedDir, 'ReactorBlockScheduledDuplicateProbe.java'));
+    const all = JSON.parse(run(['--json', schedDir]).stdout);
+    const at = (n) => all.issues.filter(i => i.location.endsWith(`:${n}`)).map(i => `${i.ruleId}/${i.severity}`).join(',');
+    assert(at(20) === 'blocking/critical', `@Scheduled .block(): blocking critical kept, reactor-block warning dropped: got ${at(20)}`);
+    assert(at(25) === 'reactor-block/critical', `.block() in an operator callback: reactor-block critical kept, blocking dropped: got ${at(25)}`);
+    const onlyBlocking = JSON.parse(run(['--json', '--rule', 'blocking', schedDir]).stdout);
     assert(
-      onlyBlocking.issues.some(i => i.location.endsWith(':19')),
+      onlyBlocking.issues.some(i => i.location.endsWith(':25')),
       '--rule blocking alone (reactor-block not run) still reports the .block() under blocking'
     );
   } finally {
-    rmSync(dupDir, { recursive: true, force: true });
+    rmSync(schedDir, { recursive: true, force: true });
   }
 
   // 0a: Evidence lines cite only evidence that measures the rule's own mechanism.
@@ -1193,6 +1259,12 @@ console.log('\n📋 Test 18b: Future.get() on Future-typed receivers; .block() r
     for (const f of ['BlockingTruePositive.java', 'KafkaBlockingProbe.java', 'KafkaSendTimeoutTruePositive.java', 'ReactorBlockTruePositive.java']) {
       copyFileSync(join(FIXTURES, f), join(evDir, f));
     }
+    // 2.4.0: ReactorBlockTruePositive is all warnings (thread unknown) and the text report
+    // prints evidence only under criticals, so a reactor-block critical is added here: a
+    // .block() in a Reactor operator callback.
+    writeFileSync(join(evDir, 'ReactorBlockOperatorProbe.java'), [
+      'import reactor.core.publisher.Mono;', '@org.springframework.stereotype.Service', 'public class ReactorBlockOperatorProbe {',
+      '    public Mono<String> a(Mono<String> m) {', '        return m.map(x -> Mono.just(x).block());', '    }', '}', ''].join('\n'));
     const text = run(['--no-color', evDir]).stdout;
     assert(!/Lab #0?4|Lab #0?8 — Kafka Streams\s*$|pool exhausted|throughput -74%|p99 \+18\.2s/m.test(text.split('kafka-send-timeout')[0] ?? text),
       'no retracted / other-mechanism figures (Lab #04 pool metrics, Lab #08 under blocking-kafka) are printed');
@@ -1239,7 +1311,7 @@ console.log('\n📋 Test 18b: Future.get() on Future-typed receivers; .block() r
   // Unit level: only the reactive .block* message is shadowed, never other calls.
   const loc = 'Svc.java:10';
   const kept = dropFindingsShadowedByReactorBlock([
-    { rule: 'reactor-block', location: loc, message: "Reactive blocking call '.block()' inside Spring bean" },
+    { rule: 'reactor-block', severity: 'critical', location: loc, message: "Reactive blocking call '.block()' inside Spring bean" },
     { rule: 'blocking', location: loc, message: 'blocking .block() detected in @Async method' },
     { rule: 'blocking', location: loc, message: 'Thread.sleep() detected in @Async method' },
     { rule: 'blocking', location: 'Svc.java:11', message: 'blocking .block() detected in @Async method' },
@@ -1248,6 +1320,14 @@ console.log('\n📋 Test 18b: Future.get() on Future-typed receivers; .block() r
   assert(!kept.some(f => f.location === loc && f.message.startsWith('blocking .block()')), 'shadowed .block() on the reactor-block line is gone');
   assert(kept.some(f => f.message.startsWith('Thread.sleep()')), 'Thread.sleep() on the same line is kept');
   assert(kept.some(f => f.location === 'Svc.java:11'), '.block() on a line without reactor-block is kept');
+  // 2.4.0: a reactor-block WARNING never shadows blocking; it is the one dropped.
+  const keptW = dropFindingsShadowedByReactorBlock([
+    { rule: 'reactor-block', severity: 'warning', location: loc, message: "Blocking call '.block()' in a Spring bean" },
+    { rule: 'blocking', severity: 'critical', location: loc, message: 'blocking .block() detected in @Scheduled method' },
+    { rule: 'reactor-block', severity: 'warning', location: 'Svc.java:12', message: "Blocking call '.block()' in a Spring bean" },
+  ]);
+  assert(keptW.length === 2 && keptW.some(f => f.rule === 'blocking' && f.location === loc), 'reactor-block warning + blocking on one line: blocking kept, the warning dropped');
+  assert(keptW.some(f => f.rule === 'reactor-block' && f.location === 'Svc.java:12'), 'a reactor-block warning with no blocking finding on its line is kept');
 }
 
 // ─── Test 19: zero regression on test-fixtures/ (no vibeguard.config.json) ─
@@ -1273,12 +1353,17 @@ console.log('\n📋 Test 19: zero regression on test-fixtures/ with no config fi
 }
 
 // ─── Test 19b (2.3.0): opt-in rules are outside the default set ──────────────
-console.log('\n📋 Test 19b: async-returns-pending-future runs only with --rule');
+console.log('\n📋 Test 19b: opt-in rules (observability, async-returns-pending-future) run only with --rule');
 {
-  assert(RULES.filter(r => r.optIn).map(r => r.id).join(',') === 'async-returns-pending-future',
-    'the only opt-in rule is async-returns-pending-future');
+  assert(RULES.filter(r => r.optIn).map(r => r.id).sort().join(',') === 'async-returns-pending-future,observability',
+    'the opt-in rules are async-returns-pending-future (2.3.0) and observability (2.4.0)');
+  assert(Object.keys(OPT_IN_LEDGER).sort().join(',') === 'async-returns-pending-future,observability',
+    'OPT_IN_LEDGER lists exactly the opt-in rules');
   const all = JSON.parse(run(['--json', FIXTURES]).stdout);
   assert(!all.issues.some(i => i.ruleId === 'async-returns-pending-future'), 'default scan: no async-returns-pending-future finding');
+  assert(!all.issues.some(i => i.ruleId === 'observability'), 'default scan: no observability finding');
+  assert(/^OPT-IN: runs only with --rule observability/.test(RULE_CATALOG.observability.full),
+    '--explain observability says opt-in');
   for (const [rule, ledger] of Object.entries(OPT_IN_LEDGER)) {
     const json = JSON.parse(run(['--json', '--rule', rule, FIXTURES]).stdout);
     const diff = diffAgainstLedger(breakdownFromJson(json), ledger);

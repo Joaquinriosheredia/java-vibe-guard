@@ -6,6 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js ≥18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
+> **2.4.0:** `reactor-block` is CRITICAL only when the file shows the call can run on a Reactor thread (a Reactor operator callback, a WebFlux handler, `subscribeOn(parallel())`); otherwise it is a WARNING, because the thread is unknown. Startup hooks and `@Async` (with `@EnableAsync`) are not reported. `observability` is opt-in (`--rule observability`). New `--skip-rule <ids>`. `kafka-send-timeout` no longer says "indefinitely". No finding becomes more severe. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#240).
+>
 > **2.3.0:** new rule `async-returns-pending-future`, **opt-in** (only with `--rule async-returns-pending-future`; not in the default set): its precision is not conclusively measured. `@Async` now counts, in `blocking` and in the new rule, only when the scanned tree has `@EnableAsync` (or `<task:annotation-driven/>`): without it `@Async` does nothing. Fewer findings only. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#230).
 >
 > **2.2.0:** `reactor-block` evidence is measured. `.block()` on a Reactor thread (event loop or `Schedulers.parallel()`) fails fast with `IllegalStateException`; it does not hold the thread. `.toFuture().get()` with WebClient on the server's event loops deadlocks every request. Two `.block()` shapes measured not to stall Reactor are no longer reported. No finding becomes more severe. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#220).
@@ -37,13 +39,13 @@ Requires Node.js 18+. Scanning needs nothing else; `--verify` needs more (see be
 |------|----------|---------|
 | **blocking** | 🔴 CRITICAL | `Thread.sleep()`, `.join()`, `.block()`/`.blockFirst()`/`.blockLast()` and `Future.get()` inside `@Async` (Spring's, with `@EnableAsync` in the scanned tree), `@Scheduled` or `@EventListener` methods (see [Future.get()](#futureget) below) |
 | **blocking-kafka** | 🔴 CRITICAL | The same blocking calls inside a `@KafkaListener` method |
-| **reactor-block** | 🔴 CRITICAL | `.block()` / `.blockFirst()` / `.blockLast()` / `.toFuture().get()` in a `@RestController`/`@Service`/`@Component` that imports `reactor.core.publisher` |
+| **reactor-block** | 🔴 CRITICAL / ⚠️ WARNING | `.block()` / `.blockFirst()` / `.blockLast()` / `.toFuture().get()` in a `@RestController`/`@Service`/`@Component` that imports `reactor.core.publisher`. CRITICAL only when the file shows it can run on a Reactor thread (a Reactor operator callback, a WebFlux handler, a `ServerRequest`/`ServerWebExchange` method, `subscribeOn(parallel())`); otherwise WARNING: the thread is unknown. Startup hooks and `@Async` (with `@EnableAsync`) are not reported |
 | **async-returns-pending-future** (opt-in) | 🔴 CRITICAL | Only with `--rule async-returns-pending-future`. An `@Async` method returning a `CompletableFuture` that this file shows to be still pending (`supplyAsync`, `…Async` stages, `WebClient…toFuture()`, `HttpClient.sendAsync`, `KafkaTemplate.send`, …) — see [below](#async-returns-pending-future) for what it does not detect yet |
 | **kafka-send-timeout** | 🔴 CRITICAL | `.send(...).get()` with no timeout in a file that uses `KafkaTemplate` |
 | **transactions** | 🔴 CRITICAL / 🟡 MAJOR | `@Transactional` + `@Async` on the same method (CRITICAL) · `@Transactional` on a Controller method (MAJOR) |
 | **layers** | 🟡 MAJOR | A Controller using a `*Repository` or `KafkaTemplate` directly |
 | **kafka** | ⚠️ WARNING | Zookeeper in docker-compose · `@KafkaListener` without `groupId` · no `@RetryableTopic` or DLQ |
-| **observability** | ⚠️ WARNING | Endpoint methods with no structured logging (`log.info`, `log.warn`, …) |
+| **observability** (opt-in) | ⚠️ WARNING | Only with `--rule observability` (not in the default set since 2.4.0: too noisy). Endpoint methods with no structured logging (`log.info`, `log.warn`, …) |
 
 `java-vibe-guard --explain <rule>` prints the full description of any rule.
 
@@ -172,13 +174,22 @@ Options:
   --json             Alias for --format json
   --rule <name>      Run only one rule: blocking | blocking-kafka | kafka | kafka-send-timeout |
                      layers | observability | reactor-block | async-returns-pending-future |
-                     transactions (async-returns-pending-future runs only when named here)
+                     transactions (async-returns-pending-future and observability run only when named here)
+  --skip-rule <ids>  Comma-separated rule ids whose findings are not reported (e.g. kafka,layers)
   --ignore <dirs>    Comma-separated directories to exclude (e.g. labs,demos,test)
   --verbose          List suppressed findings with their rule, location and justification
   --baseline         Write/regenerate vibeguard-baseline.json from the current scan and exit
   --no-color         Disable colored output
   -h, --help         display help for command
 ```
+
+### Skipping rules
+
+```bash
+java-vibe-guard . --skip-rule kafka,layers
+```
+
+Findings of the named rules are not reported, in any format, and do not count for the exit code. `--rule X --skip-rule X` is an error. Skipping `reactor-block` reports a reactive `.block()` under `blocking` instead, the same as `--rule blocking`. Opt-in rules (`observability`, `async-returns-pending-future`) are not in the default scan, so skipping them there changes nothing.
 
 ### Excluding directories
 

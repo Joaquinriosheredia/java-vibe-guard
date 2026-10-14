@@ -30,15 +30,22 @@ export const FIXTURE_LEDGER = {
   'BlockingQualifiedSpringAsyncProbe.java':       { blocking: { critical: 1 } },
   'KafkaSendTimeoutTruePositive.java':            { 'kafka-send-timeout': { critical: 2 } },
   'KafkaTruePositive.java':                       { kafka: { warning: 2 } },
-  // 0 layers findings; the observability warning is a true positive of
-  // observability.js: getUsers() has no logging.
-  'LayersFalsePositive.java':                     { observability: { warning: 1 } },
-  'LayersTruePositive.java':                      { layers: { major: 1 }, observability: { warning: 1 } },
-  'ObservabilityTruePositive.java':               { observability: { warning: 1 } },
-  // 0a dedup: Mono.block() reported once (reactor-block, not also blocking);
-  // the blocking finding is the separate Thread.sleep() on the next line.
-  'ReactorBlockAsyncDuplicateProbe.java':         { blocking: { critical: 1 }, 'reactor-block': { critical: 1 } },
-  'ReactorBlockTruePositive.java':                { 'reactor-block': { critical: 4 } },
+  // 0 layers findings. Its observability warning is in OPT_IN_LEDGER (opt-in since 2.4.0).
+  'LayersTruePositive.java':                      { layers: { major: 1 } },
+  // 0a dedup probe. 2.4.0: reactor-block does not report an @Async method when the tree
+  // has @EnableAsync (this whole-tree scan has it), so the Mono.block() is reported once,
+  // under blocking (@Async anchor), plus the separate Thread.sleep(): 2 blocking.
+  // Was { blocking: 1, reactor-block: 1 } before 2.4.0.
+  'ReactorBlockAsyncDuplicateProbe.java':         { blocking: { critical: 2 } },
+  // 2.4.0 dedup: @Scheduled .block() kept as blocking CRITICAL (reactor-block WARNING
+  // dropped); .block() in an operator callback kept as reactor-block CRITICAL.
+  'ReactorBlockScheduledDuplicateProbe.java':     { blocking: { critical: 1 }, 'reactor-block': { critical: 1 } },
+  // 2.4.0 (Phase 1 (c), decision of 2026-10-14: "reclassify only if the fixture has no
+  // evidence of a Reactor thread"): 4 critical -> 4 warning. The four calls are plain
+  // statements of @Service methods; the file shows no operator callback, WebFlux
+  // handler, ServerRequest/ServerWebExchange or subscribeOn(parallel()). The rule changed,
+  // not the expectation of a test: see DECISIONS.md (2026-10-14) and the CHANGELOG.
+  'ReactorBlockTruePositive.java':                { 'reactor-block': { warning: 4 } },
   'TransactionsTruePositive.java':                { transactions: { critical: 1 } },
   'nested/module-a/OrderService.java':            { transactions: { critical: 1 } },
   'nested/module-b/OrderService.java':            { transactions: { critical: 1 } },
@@ -59,10 +66,32 @@ export const FIXTURE_LEDGER = {
   'virtual-threads/placeholder/src/main/java/demo/AsyncService.java':                   { blocking: { critical: 1 } },
   // reactor-block precision (verify/reactor-block A4 and C): measured-safe .block() shapes
   // skipped, every other call reported (see the comments in each fixture).
+  // 2.4.0 thread context (Phase 1 (c)): CRITICAL only with evidence of a Reactor thread.
+  //  - MvcService: 1 critical -> 1 warning (approved reclassification: a plain statement of
+  //    a @Service, no evidence).
+  //  - MvcController: 3 critical -> 1 critical + 2 warnings. Kept: the operator callback
+  //    after subscribeOn(parallel()). Warnings: .toFuture().get() and .blockFirst() as
+  //    plain statements of an MVC-only handler (the servlet worker, not a Reactor thread).
+  //  - ReactiveController: 4 critical -> 2 critical + 2 warnings. Kept: the WebFlux
+  //    handler statement and fromCallable on parallel(). Warnings: the fromCallable on
+  //    boundedElastic with publishOn, and with .blockFirst(): the callable runs on
+  //    boundedElastic, so no evidence of an event-loop or parallel thread.
+  //  These two were not in the approved design's table: FLAGGED for Joaquín's review.
   'reactor-block-precision/both/src/main/java/demo/MixedController.java':        { 'reactor-block': { critical: 1 } },
-  'reactor-block-precision/mvc-only/src/main/java/demo/MvcController.java':      { 'reactor-block': { critical: 3 } },
-  'reactor-block-precision/mvc-only/src/main/java/demo/MvcService.java':         { 'reactor-block': { critical: 1 } },
-  'reactor-block-precision/webflux/src/main/java/demo/ReactiveController.java':  { 'reactor-block': { critical: 4 } },
+  'reactor-block-precision/mvc-only/src/main/java/demo/MvcController.java':      { 'reactor-block': { critical: 1, warning: 2 } },
+  'reactor-block-precision/mvc-only/src/main/java/demo/MvcService.java':         { 'reactor-block': { warning: 1 } },
+  'reactor-block-precision/webflux/src/main/java/demo/ReactiveController.java':  { 'reactor-block': { critical: 2, warning: 2 } },
+  // reactor-block thread context (2.4.0): one fixture per CRITICAL path, per exclusion and
+  // per unknown-thread shape (comments in each file). blocking.js keeps its own anchors:
+  // @Async (AsyncWorker) and @EventListener (StartupEventListener, two methods).
+  'reactor-block-context/webflux/src/main/java/demo/OperatorService.java':      { 'reactor-block': { critical: 7, warning: 6 } },
+  'reactor-block-context/webflux/src/main/java/demo/HandlerController.java':    { 'reactor-block': { critical: 3, warning: 1 } },
+  'reactor-block-context/webflux/src/main/java/demo/RouterHandlers.java':       { 'reactor-block': { critical: 2 } },
+  'reactor-block-context/webflux/src/main/java/demo/StartupRunner.java':        { 'reactor-block': { warning: 1 } },
+  'reactor-block-context/webflux/src/main/java/demo/StartupLifecycle.java':     { 'reactor-block': { warning: 1 } },
+  'reactor-block-context/webflux/src/main/java/demo/StartupReadyListener.java': { 'reactor-block': { warning: 1 } },
+  'reactor-block-context/webflux/src/main/java/demo/AsyncWorker.java':          { blocking: { critical: 1 } },
+  'reactor-block-context/webflux/src/main/java/demo/StartupEventListener.java': { blocking: { critical: 2 } },
   // 0 from async-returns-pending-future (opt-in, see OPT_IN_LEDGER); the join() of n15 is a
   // true positive of blocking.
   'async-pending-future/base/src/main/java/demo/NotMarkedShapes.java':       { blocking: { critical: 1 } },
@@ -79,7 +108,8 @@ export const FIXTURE_LEDGER = {
   // CommentMentionGateProbe, KafkaFalsePositive,
   // KafkaSendTimeoutFalsePositive, ObservabilityFalsePositive,
   // ReactorBlockFalsePositive, TransactionsBlockCommentGateProbe,
-  // TransactionsFalsePositive.
+  // TransactionsFalsePositive, and (2.4.0) reactor-block-context StartupAppRunner,
+  // StartupRefreshedListener and AsyncConfig.
 };
 
 // Opt-in rules (not in the default set, 2.3.0): expected findings of `--rule <id>` on the
@@ -89,7 +119,18 @@ export const FIXTURE_LEDGER = {
 // M2 over M8 (allOf(...).thenApply(...)) reported since 2026-10-09: 8 -> 9. Opt-in since
 // 2.3.0 (b0-corpus audit: 7 findings < 20), so these moved out of FIXTURE_LEDGER: 67 -> 53
 // (54 with enable-async/AsyncWork.java, added the same day).
+// observability: opt-in since 2.4.0 (noise: 3,856 warnings in YunaiV/ruoyi-vue-pro, vibe-guard
+// audit trial of 2026-10-12). Its 3 warnings moved out of FIXTURE_LEDGER unchanged: 54 -> 51.
+// The LayersFalsePositive warning is a true positive of observability.js: getUsers() has no
+// logging (0 layers findings there).
 export const OPT_IN_LEDGER = {
+  observability: {
+    'LayersFalsePositive.java':       { observability: { warning: 1 } },
+    'LayersTruePositive.java':        { observability: { warning: 1 } },
+    'ObservabilityTruePositive.java': { observability: { warning: 1 } },
+    // 2.4.0 reactor-block context fixture: its three @GetMapping handlers have no logging.
+    'reactor-block-context/webflux/src/main/java/demo/HandlerController.java': { observability: { warning: 3 } },
+  },
   'async-returns-pending-future': {
     'async-pending-future/base/src/main/java/demo/ReportService.java':         { 'async-returns-pending-future': { critical: 9 } },
     'async-pending-future/base/src/main/java/demo/SelfInjectedService.java':   { 'async-returns-pending-future': { critical: 2 } },

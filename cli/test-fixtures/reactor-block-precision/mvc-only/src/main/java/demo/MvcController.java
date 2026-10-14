@@ -27,7 +27,7 @@ public class MvcController {
         return response.block();
     }
 
-    // REPORTED: inside an operator after subscribeOn(parallel()), so it runs on a
+    // REPORTED, CRITICAL: inside an operator after subscribeOn(parallel()), so it runs on a
     // Reactor worker even in an MVC app (variant A2 shape: fails with an exception).
     public Mono<String> onParallel() {
         return Mono.just(1)
@@ -35,12 +35,14 @@ public class MvcController {
                 .map(x -> client.call().block());
     }
 
-    // REPORTED: .toFuture().get() was not measured on MVC.
+    // REPORTED as WARNING (2.4.0): .toFuture().get() was not measured on MVC, and this
+    // handler runs on the servlet worker: no evidence of a Reactor thread.
     public String future() throws Exception {
         return client.call().toFuture().get();
     }
 
-    // REPORTED: .blockFirst() was not measured on MVC.
+    // REPORTED as WARNING (2.4.0): .blockFirst() was not measured on MVC, and this
+    // handler runs on the servlet worker: no evidence of a Reactor thread.
     public String first() {
         return client.many().blockFirst();
     }

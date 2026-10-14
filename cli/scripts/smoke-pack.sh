@@ -30,7 +30,7 @@ JVG=(node "$WORK/project/node_modules/java-vibe-guard/bin/cli.js")
 
 # Scan target: a copy of fixtures from the repo (not shipped in the package).
 mkdir -p sample/src/main/java/demo
-for f in ReactorBlockAsyncDuplicateProbe BlockingFutureGetTruePositive KafkaTruePositive; do
+for f in ReactorBlockAsyncDuplicateProbe ReactorBlockScheduledDuplicateProbe BlockingFutureGetTruePositive KafkaTruePositive; do
   cp "$CLI_DIR/test-fixtures/$f.java" sample/src/main/java/demo/
 done
 # 2.3.0: @Async counts only with @EnableAsync in the scanned tree.
@@ -66,8 +66,12 @@ const rules = new Set(json.issues.map(i => i.ruleId));
 for (const r of ['reactor-block', 'blocking', 'kafka']) {
   if (!rules.has(r)) throw new Error(`rule ${r} produced no finding — rule missing from the package?`);
 }
-const dup = json.issues.filter(i => i.location.endsWith('ReactorBlockAsyncDuplicateProbe.java:19'));
-if (dup.length !== 1) throw new Error(`Mono.block() must be reported once, got ${dup.length}`);
+// Each .block() reported once (2.4.0: @Async with @EnableAsync under blocking only; the
+// @Scheduled probe keeps blocking's CRITICAL or reactor-block's CRITICAL, never both).
+for (const loc of ['ReactorBlockAsyncDuplicateProbe.java:23', 'ReactorBlockScheduledDuplicateProbe.java:20', 'ReactorBlockScheduledDuplicateProbe.java:25']) {
+  const dup = json.issues.filter(i => i.location.endsWith(loc));
+  if (dup.length !== 1 || dup[0].severity !== 'critical') throw new Error(`${loc}: Mono.block() must be reported once, as CRITICAL; got ${JSON.stringify(dup.map(i => `${i.ruleId}/${i.severity}`))}`);
+}
 if (!json.issues.some(i => i.message.startsWith('blocking Future.get()'))) throw new Error('typed Future.get() not detected');
 const sarif = JSON.parse(fs.readFileSync('scan.sarif', 'utf8'));
 if (sarif.version !== '2.1.0') throw new Error('SARIF version is not 2.1.0');
@@ -134,6 +138,29 @@ if (at('VariantA2Controller.java').length !== 1 || !/IllegalStateException/.test
 if (at('VariantA3Controller.java').length !== 1 || !/deadlocked/.test(at('VariantA3Controller.java')[0].message)) throw new Error(`.toFuture().get() (A3): expected 1 finding citing the deadlock, got ${JSON.stringify(at('VariantA3Controller.java'))}`);
 if (at('VariantA4Controller.java').length !== 0) throw new Error(`boundedElastic form (A4): expected no finding, got ${JSON.stringify(at('VariantA4Controller.java'))}`);
 if (mvc.length !== 0) throw new Error(`MVC-only @RestController .block() (C): expected no finding, got ${JSON.stringify(mvc)}`);
+// 2.4.0: the measured shapes stay CRITICAL (evidence of a Reactor thread in the file).
+for (const v of ['A1', 'A2', 'A3']) {
+  if (at(`Variant${v}Controller.java`)[0].severity !== 'critical') throw new Error(`${v}: expected CRITICAL, got ${at(`Variant${v}Controller.java`)[0].severity}`);
+}
+EOF
+
+# 2.4.0: reactor-block with no evidence of a Reactor thread is a WARNING (thread unknown),
+# a startup hook is not reported, and observability is opt-in.
+mkdir -p rb-ctx/src/main/java/demo
+cp "$CLI_DIR"/test-fixtures/reactor-block-context/webflux/pom.xml rb-ctx/
+cp "$CLI_DIR"/test-fixtures/ReactorBlockTruePositive.java "$CLI_DIR"/test-fixtures/reactor-block-context/webflux/src/main/java/demo/StartupRunner.java rb-ctx/src/main/java/demo/
+"${JVG[@]}" rb-ctx --rule reactor-block --format json > rb-ctx.json || true
+"${JVG[@]}" rb-ctx --rule observability --format json > rb-obs.json || true
+node - <<'EOF'
+const fs = require('fs');
+const issues = JSON.parse(fs.readFileSync('rb-ctx.json', 'utf8')).issues;
+const tp = issues.filter(i => i.location.includes('ReactorBlockTruePositive.java'));
+if (tp.length !== 4 || tp.some(i => i.severity !== 'warning')) throw new Error(`@Service statements: expected 4 WARNINGS, got ${JSON.stringify(tp.map(i => i.severity))}`);
+if (!tp.every(i => /Detection: .*Impact: .*Reproduction: /.test(i.message))) throw new Error('warning message must separate Detection / Impact / Reproduction');
+const runner = issues.filter(i => i.location.includes('StartupRunner.java'));
+if (runner.length !== 1 || runner[0].location !== 'src/main/java/demo/StartupRunner.java:18') throw new Error(`CommandLineRunner.run not reported, other() a warning: got ${JSON.stringify(runner.map(i => i.location))}`);
+if (JSON.parse(fs.readFileSync('scan.json', 'utf8')).issues.some(i => i.ruleId === 'observability')) throw new Error('observability ran without --rule (must be opt-in since 2.4.0)');
+if (!Array.isArray(JSON.parse(fs.readFileSync('rb-obs.json', 'utf8')).issues)) throw new Error('--rule observability must still run');
 EOF
 
 # --verify hung silently on some CI runner images (2026-10-06, master after #29).

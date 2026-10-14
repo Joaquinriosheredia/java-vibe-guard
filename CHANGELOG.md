@@ -1,13 +1,71 @@
 # Changelog
 
-## Unreleased
+## 2.4.0
 
+npm `2.4.0`, Action `@v2.4.0` / `@v2`. CLI only: the MCP server is unchanged, and its
+jar stays the one attached to the v2.0.0 release. No finding becomes more severe, and the
+default scan reports the same number of findings or fewer. Some move between rules or
+severities, as described below. Found in the vibe-guard audit trial of 2026-10-12: these
+three repositories are now the development set and do not count as a precision measure.
+
+- **`reactor-block`: CRITICAL only with evidence of a Reactor thread; otherwise WARNING.**
+  The measured impact needs a Reactor thread: `IllegalStateException` on the event loop
+  or `Schedulers.parallel()`, and the `.toFuture().get()` deadlock on the event loop.
+  Before, every call in a bean was CRITICAL. Now the finding is CRITICAL only when the
+  file shows that thread:
+  - inside a lambda or anonymous class passed to a Reactor operator (`map`, `flatMap`,
+    `filter`, `doOnNext`, `subscribe`, …);
+  - a statement of a public method of a `@RestController` in a module that is not
+    MVC-only (a WebFlux handler);
+  - a statement of a method that takes `ServerRequest` or `ServerWebExchange`;
+  - inside `Mono/Flux.fromCallable/fromSupplier/fromRunnable/defer` moved with
+    `subscribeOn(parallel()/single())`, or not moved at all inside one of those handlers.
+
+  Anywhere else the thread is unknown: the finding is a **WARNING** (never silence), and
+  its message separates detection, the conditional measured impact and reproduction (not
+  available).
+
+  **Newly not reported, in the same method only:**
+  - Spring's `@Async` with `@EnableAsync` in the scanned tree. `blocking` still reports
+    it under its `@Async` anchor, so the call moves from `reactor-block` to `blocking`.
+    In java-vibe-guard-demo, `ReactiveController.java:14` does this; it stays CRITICAL;
+  - `CommandLineRunner.run` and `ApplicationRunner.run`;
+  - `SmartLifecycle.start` and `Lifecycle.start`;
+  - `onApplicationEvent` of an `ApplicationListener<ApplicationReadyEvent|ContextRefreshedEvent>`;
+  - `@EventListener` for `ApplicationReadyEvent`.
+
+  When `blocking` reports the same `.block()`, a CRITICAL `reactor-block` replaces it as
+  before. A WARNING one is dropped instead, so `blocking`'s severity is never lowered.
+
+  **Known limit:** the method's callers are not followed, across methods or files. A
+  private helper called from a WebFlux handler is a WARNING (an accepted critical false
+  negative).
+
+  **Development set (halo-dev/halo `68fc9d1`):** 10 critical before, all 10 false in the
+  manual review. Now 0 critical, 9 warnings and 1 not reported, as the design predicted.
+
+  **Fixtures reclassified** (`cli/test/fixture-ledger.js` says why for each):
+  - `ReactorBlockTruePositive.java`: 4 critical → 4 warning;
+  - `MvcService`: 1 → warning;
+  - `MvcController`: 3 critical → 1 critical + 2 warning;
+  - `ReactiveController`: 4 critical → 2 critical + 2 warning.
 - **`kafka-send-timeout`: the message no longer says the thread is blocked "indefinitely".**
   An untimed `.get()` waits until the producer gives up: up to `delivery.timeout.ms`
   (120 s with the Kafka client defaults), plus up to `max.block.ms` (60 s by default)
   inside `send()` while metadata is unavailable. The message and the rule description now
   say so. Detection, severity and evidence are unchanged; only the text differs (found in
   the vibe-guard audit trial of 2026-10-12, YunaiV/ruoyi-vue-pro).
+- **`observability` is no longer in the default set: it runs only with
+  `--rule observability`** (or `rule:` in the Action), like `async-returns-pending-future`.
+  The default scan reports the same findings minus the `observability` warnings, so no
+  exit code changes (they were never critical). Motive: noise. The vibe-guard audit trial
+  of 2026-10-12 got 3,856 `observability` warnings in YunaiV/ruoyi-vue-pro. The rule itself
+  is unchanged. `--skip-rule observability` is accepted and changes nothing in a default
+  scan.
+- **New option `--skip-rule <ids>`:** comma-separated rule ids whose findings are not
+  reported, in any format (text, JSON, SARIF), and do not count for the exit code.
+  `--rule X --skip-rule X` and unknown ids are errors (exit 1). Skipping `reactor-block`
+  reports a reactive `.block()` under `blocking`, as `--rule blocking` already does.
 
 ## 2.3.0
 

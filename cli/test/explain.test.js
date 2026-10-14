@@ -105,7 +105,7 @@ console.log('\n📋 §2: Data source — rule-catalog.js content and corrected c
   assert(RULE_CATALOG['kafka-send-timeout'].severities.join(',') === 'critical', 'kafka-send-timeout: single severity, critical');
   assert(RULE_CATALOG.layers.severities.join(',') === 'major', 'layers: single severity, major');
   assert(RULE_CATALOG.observability.severities.join(',') === 'warning', 'observability: single severity, warning');
-  assert(RULE_CATALOG['reactor-block'].severities.join(',') === 'critical', 'reactor-block: single severity, critical');
+  assert(RULE_CATALOG['reactor-block'].severities.join(',') === 'critical,warning', 'reactor-block: critical (evidence of a Reactor thread) or warning (thread unknown), 2.4.0');
   assert(
     RULE_CATALOG.transactions.severities.join(',') === 'critical,major',
     'transactions: mixed severity, highest-first (critical, major) — matches transactions.js:21/33 evidence'
