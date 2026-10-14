@@ -16,7 +16,7 @@ public class ReactiveController {
         this.client = client;
     }
 
-    // REPORTED: plain .block() in a WebFlux handler runs on the event loop.
+    // REPORTED, CRITICAL: plain .block() in a WebFlux handler runs on the event loop.
     public String plain() {
         return client.call().block();
     }
@@ -32,20 +32,24 @@ public class ReactiveController {
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
-    // REPORTED: subscribeOn(parallel()) is not boundedElastic.
+    // REPORTED, CRITICAL: subscribeOn(parallel()) runs the callable on a Reactor thread.
     public Mono<String> onParallel() {
         return Mono.fromCallable(() -> client.call().block())
                 .subscribeOn(Schedulers.parallel());
     }
 
-    // REPORTED: a publishOn can move the work off boundedElastic.
+    // REPORTED as WARNING (2.4.0): a publishOn keeps it out of the measured A4 shape, so it
+    // is not skipped; but the callable runs on boundedElastic (subscribeOn), not on a
+    // Reactor event-loop or parallel thread: no evidence of one.
     public Mono<String> withPublishOn() {
         return Mono.fromCallable(() -> client.call().block())
                 .subscribeOn(Schedulers.boundedElastic())
                 .publishOn(Schedulers.parallel());
     }
 
-    // REPORTED: .blockFirst() was not measured on boundedElastic.
+    // REPORTED as WARNING (2.4.0): .blockFirst() was not measured on boundedElastic, so it
+    // is not skipped; but the callable runs on boundedElastic: no evidence of a Reactor
+    // event-loop or parallel thread.
     public Mono<String> elasticBlockFirst() {
         return Mono.fromCallable(() -> client.many().blockFirst())
                 .subscribeOn(Schedulers.boundedElastic());

@@ -55,7 +55,7 @@ therefore adds one field per entry:
   'kafka-send-timeout': { short, full, severities: ['critical'] },
   layers:              { short, full, severities: ['major'] },
   observability:       { short, full, severities: ['warning'] },
-  'reactor-block':     { short, full, severities: ['critical'] },
+  'reactor-block':     { short, full, severities: ['critical', 'warning'] },
   transactions:        { short, full, severities: ['critical', 'major'] },
 }
 ```
@@ -82,8 +82,9 @@ every distinct severity that rule id's `findings.push(...)` call sites in
   while metadata is unavailable).
 - `layers`: always `major` (`cli/src/rules/layers.js:28,38`).
 - `observability`: always `warning` (`cli/src/rules/observability.js:54`).
-- `reactor-block`: always `critical` (`cli/src/rules/reactor-block.js`, two
-  `findings.push(...)` call sites, both `critical`). New rule — faithful CLI
+- `reactor-block`: `critical` when the file shows the call can run on a Reactor
+  thread, `warning` when the thread is unknown (2.4.0, `classify()` in
+  `cli/src/rules/reactor-block.js`). New rule — faithful CLI
   port of the MCP server's VIBE-002 (`ReactorBlockingCallRule.java`), gated
   additionally on a `reactor.core.publisher` import (not present in the
   Java original). Evidence: README.md "Found in the Wild" Finding 2,

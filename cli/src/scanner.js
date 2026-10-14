@@ -56,25 +56,30 @@ export const RULES = [
 export const RULE_FN_ALIASES = { 'blocking-kafka': 'blocking' };
 
 // blocking.js and reactor-block.js both match a reactive .block()/
-// .blockFirst()/.blockLast() — e.g. Mono.block() inside an @Async method of a
-// @RestController reported the same call twice (java-vibe-guard-demo,
-// ReactiveController.java:14). When both fire on the same location for that
-// same call, only reactor-block (the more specific diagnosis) is kept. Other
-// blocking findings on that line (Thread.sleep(), .join(), Future.get()) are
-// a different call and are never dropped. Only applies when both rules ran:
-// `--rule blocking` alone still reports the .block() under blocking.
+// .blockFirst()/.blockLast() — e.g. Mono.block() inside an @Scheduled method of a
+// @Service reported the same call twice. When both fire on the same location for that
+// same call, one is kept (2.4.0):
+//   - reactor-block CRITICAL (evidence of a Reactor thread): it is the more specific
+//     diagnosis, the blocking finding is dropped;
+//   - reactor-block WARNING (thread unknown to reactor-block): blocking knows the thread
+//     from its anchor (@Scheduled, @Async, @EventListener, @KafkaListener), so the
+//     reactor-block warning is dropped and blocking's severity is never lowered.
+// Other blocking findings on that line (Thread.sleep(), .join(), Future.get()) are a
+// different call and are never dropped. Only applies when both rules ran: `--rule
+// blocking` alone still reports the .block() under blocking.
 const REACTIVE_BLOCKING_MESSAGE_RE = /^blocking \.(block|blockFirst|blockLast)\(\)/;
 
 export function dropFindingsShadowedByReactorBlock(findings) {
-  const reactorLocations = new Set(
-    findings.filter(f => f.rule === 'reactor-block').map(f => f.location)
-  );
-  if (reactorLocations.size === 0) return findings;
-  return findings.filter(f =>
-    !((f.rule === 'blocking' || f.rule === 'blocking-kafka')
-      && reactorLocations.has(f.location)
-      && REACTIVE_BLOCKING_MESSAGE_RE.test(f.message))
-  );
+  const reactor = findings.filter(f => f.rule === 'reactor-block');
+  if (reactor.length === 0) return findings;
+  const isReactiveBlocking = f => (f.rule === 'blocking' || f.rule === 'blocking-kafka') && REACTIVE_BLOCKING_MESSAGE_RE.test(f.message);
+  const criticalAt = new Set(reactor.filter(f => f.severity === 'critical').map(f => f.location));
+  const blockingAt = new Set(findings.filter(isReactiveBlocking).map(f => f.location));
+  return findings.filter(f => {
+    if (isReactiveBlocking(f)) return !criticalAt.has(f.location);
+    if (f.rule === 'reactor-block' && f.severity !== 'critical') return !blockingAt.has(f.location);
+    return true;
+  });
 }
 
 const VALID_RULE_IDS = Object.keys(RULE_CATALOG);
