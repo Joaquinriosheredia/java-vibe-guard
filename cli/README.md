@@ -6,6 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js ≥18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
+> **2.4.0:** `reactor-block` is CRITICAL only when the file shows the call can run on a Reactor thread (a Reactor operator callback, a WebFlux handler, `subscribeOn(parallel())`); otherwise it is a WARNING, because the thread is unknown. Startup hooks and `@Async` (with `@EnableAsync`) are not reported. `observability` is opt-in (`--rule observability`). New `--skip-rule <ids>`. `kafka-send-timeout` no longer says "indefinitely". No finding becomes more severe. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#240).
+>
 > **2.3.0:** new rule `async-returns-pending-future`, **opt-in** (only with `--rule async-returns-pending-future`; not in the default set): its precision is not conclusively measured. `@Async` now counts, in `blocking` and in the new rule, only when the scanned tree has `@EnableAsync` (or `<task:annotation-driven/>`): without it `@Async` does nothing. Fewer findings only. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#230).
 >
 > **2.2.0:** `reactor-block` evidence is measured. `.block()` on a Reactor thread (event loop or `Schedulers.parallel()`) fails fast with `IllegalStateException`; it does not hold the thread. `.toFuture().get()` with WebClient on the server's event loops deadlocks every request. Two `.block()` shapes measured not to stall Reactor are no longer reported. No finding becomes more severe. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#220).
