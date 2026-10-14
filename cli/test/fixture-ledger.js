@@ -76,7 +76,13 @@ export const FIXTURE_LEDGER = {
   //    handler statement and fromCallable on parallel(). Warnings: the fromCallable on
   //    boundedElastic with publishOn, and with .blockFirst(): the callable runs on
   //    boundedElastic, so no evidence of an event-loop or parallel thread.
-  //  These two were not in the approved design's table: FLAGGED for Joaquín's review.
+  //  These two were not in the design's table; approved by Joaquín on 2026-10-14 (vibe-guard
+  //  DECISIONS.md, 2026-10-14 (2)): they follow the approved principle, critical only with
+  //  evidence of a Reactor thread, against the two measured controls of verify/reactor-block:
+  //  variant C (an MVC-only handler runs on the servlet worker, not a Reactor thread) and
+  //  variant A4 (a fromCallable moved with subscribeOn(boundedElastic()) runs on
+  //  boundedElastic). .toFuture().get()/.blockFirst()/publishOn were not measured in those
+  //  shapes, so they are reported, as warnings, and not skipped.
   'reactor-block-precision/both/src/main/java/demo/MixedController.java':        { 'reactor-block': { critical: 1 } },
   'reactor-block-precision/mvc-only/src/main/java/demo/MvcController.java':      { 'reactor-block': { critical: 1, warning: 2 } },
   'reactor-block-precision/mvc-only/src/main/java/demo/MvcService.java':         { 'reactor-block': { warning: 1 } },
