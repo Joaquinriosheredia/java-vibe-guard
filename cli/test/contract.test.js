@@ -1273,12 +1273,17 @@ console.log('\n📋 Test 19: zero regression on test-fixtures/ with no config fi
 }
 
 // ─── Test 19b (2.3.0): opt-in rules are outside the default set ──────────────
-console.log('\n📋 Test 19b: async-returns-pending-future runs only with --rule');
+console.log('\n📋 Test 19b: opt-in rules (observability, async-returns-pending-future) run only with --rule');
 {
-  assert(RULES.filter(r => r.optIn).map(r => r.id).join(',') === 'async-returns-pending-future',
-    'the only opt-in rule is async-returns-pending-future');
+  assert(RULES.filter(r => r.optIn).map(r => r.id).sort().join(',') === 'async-returns-pending-future,observability',
+    'the opt-in rules are async-returns-pending-future (2.3.0) and observability (2.4.0)');
+  assert(Object.keys(OPT_IN_LEDGER).sort().join(',') === 'async-returns-pending-future,observability',
+    'OPT_IN_LEDGER lists exactly the opt-in rules');
   const all = JSON.parse(run(['--json', FIXTURES]).stdout);
   assert(!all.issues.some(i => i.ruleId === 'async-returns-pending-future'), 'default scan: no async-returns-pending-future finding');
+  assert(!all.issues.some(i => i.ruleId === 'observability'), 'default scan: no observability finding');
+  assert(/^OPT-IN: runs only with --rule observability/.test(RULE_CATALOG.observability.full),
+    '--explain observability says opt-in');
   for (const [rule, ledger] of Object.entries(OPT_IN_LEDGER)) {
     const json = JSON.parse(run(['--json', '--rule', rule, FIXTURES]).stdout);
     const diff = diffAgainstLedger(breakdownFromJson(json), ledger);

@@ -121,7 +121,7 @@ export const RULE_CATALOG = {
   },
   observability: {
     short: 'Missing structured logging on request-handling endpoints.',
-    full: 'Detects endpoints that lack structured logging, reducing the ability to trace and diagnose request behavior in production.',
+    full: 'OPT-IN: runs only with --rule observability; it is not in the default set (since 2.4.0, because of noise: 3,856 warnings in one repository of the 2026-10-12 audit trial). Detects endpoints that lack structured logging, reducing the ability to trace and diagnose request behavior in production.',
     severities: ['warning'],
     evidence: { kind: 'mechanism', text: 'requests through the endpoint leave no structured log line to trace in production' },
   },

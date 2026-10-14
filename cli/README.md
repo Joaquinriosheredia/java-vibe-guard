@@ -43,7 +43,7 @@ Requires Node.js 18+. Scanning needs nothing else; `--verify` needs more (see be
 | **transactions** | 🔴 CRITICAL / 🟡 MAJOR | `@Transactional` + `@Async` on the same method (CRITICAL) · `@Transactional` on a Controller method (MAJOR) |
 | **layers** | 🟡 MAJOR | A Controller using a `*Repository` or `KafkaTemplate` directly |
 | **kafka** | ⚠️ WARNING | Zookeeper in docker-compose · `@KafkaListener` without `groupId` · no `@RetryableTopic` or DLQ |
-| **observability** | ⚠️ WARNING | Endpoint methods with no structured logging (`log.info`, `log.warn`, …) |
+| **observability** (opt-in) | ⚠️ WARNING | Only with `--rule observability` (not in the default set since 2.4.0: too noisy). Endpoint methods with no structured logging (`log.info`, `log.warn`, …) |
 
 `java-vibe-guard --explain <rule>` prints the full description of any rule.
 
@@ -172,8 +172,8 @@ Options:
   --json             Alias for --format json
   --rule <name>      Run only one rule: blocking | blocking-kafka | kafka | kafka-send-timeout |
                      layers | observability | reactor-block | async-returns-pending-future |
-                     transactions (async-returns-pending-future runs only when named here)
-  --skip-rule <ids>  Comma-separated rule ids whose findings are not reported (e.g. observability)
+                     transactions (async-returns-pending-future and observability run only when named here)
+  --skip-rule <ids>  Comma-separated rule ids whose findings are not reported (e.g. kafka,layers)
   --ignore <dirs>    Comma-separated directories to exclude (e.g. labs,demos,test)
   --verbose          List suppressed findings with their rule, location and justification
   --baseline         Write/regenerate vibeguard-baseline.json from the current scan and exit
@@ -184,10 +184,10 @@ Options:
 ### Skipping rules
 
 ```bash
-java-vibe-guard . --skip-rule observability
+java-vibe-guard . --skip-rule kafka,layers
 ```
 
-Findings of the named rules are not reported, in any format, and do not count for the exit code. `--rule X --skip-rule X` is an error. Skipping `reactor-block` reports a reactive `.block()` under `blocking` instead, the same as `--rule blocking`.
+Findings of the named rules are not reported, in any format, and do not count for the exit code. `--rule X --skip-rule X` is an error. Skipping `reactor-block` reports a reactive `.block()` under `blocking` instead, the same as `--rule blocking`. Opt-in rules (`observability`, `async-returns-pending-future`) are not in the default scan, so skipping them there changes nothing.
 
 ### Excluding directories
 

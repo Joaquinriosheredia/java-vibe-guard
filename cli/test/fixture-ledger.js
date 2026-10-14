@@ -30,11 +30,8 @@ export const FIXTURE_LEDGER = {
   'BlockingQualifiedSpringAsyncProbe.java':       { blocking: { critical: 1 } },
   'KafkaSendTimeoutTruePositive.java':            { 'kafka-send-timeout': { critical: 2 } },
   'KafkaTruePositive.java':                       { kafka: { warning: 2 } },
-  // 0 layers findings; the observability warning is a true positive of
-  // observability.js: getUsers() has no logging.
-  'LayersFalsePositive.java':                     { observability: { warning: 1 } },
-  'LayersTruePositive.java':                      { layers: { major: 1 }, observability: { warning: 1 } },
-  'ObservabilityTruePositive.java':               { observability: { warning: 1 } },
+  // 0 layers findings. Its observability warning is in OPT_IN_LEDGER (opt-in since 2.4.0).
+  'LayersTruePositive.java':                      { layers: { major: 1 } },
   // 0a dedup: Mono.block() reported once (reactor-block, not also blocking);
   // the blocking finding is the separate Thread.sleep() on the next line.
   'ReactorBlockAsyncDuplicateProbe.java':         { blocking: { critical: 1 }, 'reactor-block': { critical: 1 } },
@@ -89,7 +86,16 @@ export const FIXTURE_LEDGER = {
 // M2 over M8 (allOf(...).thenApply(...)) reported since 2026-10-09: 8 -> 9. Opt-in since
 // 2.3.0 (b0-corpus audit: 7 findings < 20), so these moved out of FIXTURE_LEDGER: 67 -> 53
 // (54 with enable-async/AsyncWork.java, added the same day).
+// observability: opt-in since 2.4.0 (noise: 3,856 warnings in YunaiV/ruoyi-vue-pro, vibe-guard
+// audit trial of 2026-10-12). Its 3 warnings moved out of FIXTURE_LEDGER unchanged: 54 -> 51.
+// The LayersFalsePositive warning is a true positive of observability.js: getUsers() has no
+// logging (0 layers findings there).
 export const OPT_IN_LEDGER = {
+  observability: {
+    'LayersFalsePositive.java':       { observability: { warning: 1 } },
+    'LayersTruePositive.java':        { observability: { warning: 1 } },
+    'ObservabilityTruePositive.java': { observability: { warning: 1 } },
+  },
   'async-returns-pending-future': {
     'async-pending-future/base/src/main/java/demo/ReportService.java':         { 'async-returns-pending-future': { critical: 9 } },
     'async-pending-future/base/src/main/java/demo/SelfInjectedService.java':   { 'async-returns-pending-future': { critical: 2 } },

@@ -37,7 +37,9 @@ export const RULES = [
   { id: 'kafka',              fn: checkKafka },
   { id: 'kafka-send-timeout', fn: checkKafkaSendTimeout },
   { id: 'transactions',       fn: checkTransactions },
-  { id: 'observability',      fn: checkObservability },
+  // Opt-in (2.4.0): runs only with --rule observability. Noise: 3,856 warnings in
+  // YunaiV/ruoyi-vue-pro in the vibe-guard audit trial of 2026-10-12.
+  { id: 'observability',      fn: checkObservability, optIn: true },
   { id: 'reactor-block',      fn: checkReactorBlock },
   // Opt-in (2.3.0): runs only with --rule async-returns-pending-future. Pre-registered
   // consequence of the b0-corpus audit (validation/b0-corpus/AUDIT.md): 7 findings in 50

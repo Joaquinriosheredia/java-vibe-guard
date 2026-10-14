@@ -2,7 +2,8 @@
 /**
  * --skip-rule <ids>: findings of the named rule ids are not reported, in any
  * format, and do not count for the exit code. Everything else is identical to
- * the default scan of test-fixtures/.
+ * the default scan of test-fixtures/. observability is opt-in since 2.4.0: it is
+ * not in that default scan, and skipping it changes nothing.
  *
  * Run: node test/skip-rule.test.js
  */
@@ -38,29 +39,41 @@ const json = (args) => {
 };
 const key = (i) => `${i.ruleId}|${i.location}|${i.message}`;
 
-console.log('\n📋 --skip-rule observability');
+console.log('\n📋 observability is opt-in (2.4.0): not in the default set');
 const base = json([]);
-const skipped = json(['--skip-rule', 'observability']);
-assert(base.issues.some(i => i.ruleId === 'observability'), 'the default scan of test-fixtures/ has observability findings (precondition)');
-assert(!skipped.issues.some(i => i.ruleId === 'observability'), 'no observability finding with --skip-rule observability');
+assert(!base.issues.some(i => i.ruleId === 'observability'), 'the default scan of test-fixtures/ has no observability finding');
+const onlyObs = json(['--rule', 'observability']);
+assert(onlyObs.issues.length > 0 && onlyObs.issues.every(i => i.ruleId === 'observability'), '--rule observability still runs it');
+const skipObs = json(['--skip-rule', 'observability']);
 assert(
-  JSON.stringify(skipped.issues.map(key)) === JSON.stringify(base.issues.filter(i => i.ruleId !== 'observability').map(key)),
+  JSON.stringify(skipObs.issues.map(key)) === JSON.stringify(base.issues.map(key)) && skipObs.code === base.code,
+  '--skip-rule observability is accepted and changes nothing in a default scan'
+);
+
+console.log('\n📋 --skip-rule kafka');
+const skipped = json(['--skip-rule', 'kafka']);
+assert(base.issues.some(i => i.ruleId === 'kafka'), 'the default scan of test-fixtures/ has kafka findings (precondition)');
+assert(!skipped.issues.some(i => i.ruleId === 'kafka'), 'no kafka finding with --skip-rule kafka');
+assert(
+  JSON.stringify(skipped.issues.map(key)) === JSON.stringify(base.issues.filter(i => i.ruleId !== 'kafka').map(key)),
   'every other finding is identical, in the same order'
 );
-assert(skipped.code === base.code, `exit code unchanged (${base.code}): observability is only a warning`);
+assert(skipped.code === base.code, `exit code unchanged (${base.code}): kafka is only a warning`);
 
-const text = run([FIXTURES, '--skip-rule', 'observability']);
-assert(!/observability/.test(text.stdout), 'text output does not mention observability');
-const sarif = JSON.parse(run([FIXTURES, '--format', 'sarif', '--skip-rule', 'observability']).stdout);
+const text = run([FIXTURES, '--skip-rule', 'kafka']);
+const kafkaMessages = base.issues.filter(i => i.ruleId === 'kafka').map(i => i.message);
+assert(kafkaMessages.every(m => !text.stdout.includes(m)), 'text output has none of the kafka findings');
+assert(kafkaMessages.every(m => run([FIXTURES]).stdout.includes(m)), 'they are in the text output without the option (control)');
+const sarif = JSON.parse(run([FIXTURES, '--format', 'sarif', '--skip-rule', 'kafka']).stdout);
 const run0 = sarif.runs[0];
-assert(!run0.results.some(r => r.ruleId === 'observability'), 'SARIF has no observability result');
-assert(!run0.tool.driver.rules.some(r => r.id === 'observability'), 'SARIF driver.rules does not list observability');
+assert(!run0.results.some(r => r.ruleId === 'kafka'), 'SARIF has no kafka result');
+assert(!run0.tool.driver.rules.some(r => r.id === 'kafka'), 'SARIF driver.rules does not list kafka');
 assert(run0.results.length === skipped.issues.length, 'SARIF result count equals the JSON issue count');
 
 console.log('\n📋 several ids, case and spaces');
-const two = json(['--skip-rule', ' Observability , kafka ']);
-assert(!two.issues.some(i => i.ruleId === 'observability' || i.ruleId === 'kafka'), 'comma-separated, trimmed, case-insensitive like --rule');
-assert(two.issues.length === base.issues.filter(i => i.ruleId !== 'observability' && i.ruleId !== 'kafka').length, 'only those two rules are removed');
+const two = json(['--skip-rule', ' Layers , kafka ']);
+assert(!two.issues.some(i => i.ruleId === 'layers' || i.ruleId === 'kafka'), 'comma-separated, trimmed, case-insensitive like --rule');
+assert(two.issues.length === base.issues.filter(i => i.ruleId !== 'layers' && i.ruleId !== 'kafka').length, 'only those two rules are removed');
 
 console.log('\n📋 rule ids that share a detector');
 const noBlocking = json(['--skip-rule', 'blocking']);
