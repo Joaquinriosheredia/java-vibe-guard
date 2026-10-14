@@ -92,7 +92,7 @@ export const RULE_CATALOG = {
   },
   'kafka-send-timeout': {
     short: 'Kafka send() result consumed with an unbounded blocking get().',
-    full: 'Detects a `.send(...).get()` chain with no timeout argument, in a file that imports KafkaTemplate or org.springframework.kafka — `.get(timeout, TimeUnit)` calls with an explicit timeout argument are not matched. An unbounded .get() blocks the calling thread indefinitely if the broker is slow or unavailable, risking thread-pool exhaustion under sustained failure — the same shape as Java-Production-Labs SagaOrderService.java and StreamController.java before they were fixed to use .get(timeout, TimeUnit).',
+    full: 'Detects a `.send(...).get()` chain with no timeout argument, in a file that imports KafkaTemplate or org.springframework.kafka — `.get(timeout, TimeUnit)` calls with an explicit timeout argument are not matched. The .get() has no timeout of its own: if the broker is slow or unavailable, the calling thread stays blocked until the producer gives up — up to delivery.timeout.ms (120 s with the Kafka client defaults), plus up to max.block.ms (60 s by default) inside send() while metadata is unavailable — risking thread-pool exhaustion under sustained failure — the same shape as Java-Production-Labs SagaOrderService.java and StreamController.java before they were fixed to use .get(timeout, TimeUnit).',
     severities: ['critical'],
     evidence: {
       kind: 'measured',

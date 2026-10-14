@@ -2,13 +2,23 @@
 
 ## Unreleased
 
+- **`kafka-send-timeout`: the message no longer says the thread is blocked "indefinitely".**
+  An untimed `.get()` waits until the producer gives up: up to `delivery.timeout.ms`
+  (120 s with the Kafka client defaults), plus up to `max.block.ms` (60 s by default)
+  inside `send()` while metadata is unavailable. The message and the rule description now
+  say so. Detection, severity and evidence are unchanged; only the text differs (found in
+  the vibe-guard audit trial of 2026-10-12, YunaiV/ruoyi-vue-pro).
+- **`observability` is no longer in the default set: it runs only with
+  `--rule observability`** (or `rule:` in the Action), like `async-returns-pending-future`.
+  The default scan reports the same findings minus the `observability` warnings, so no
+  exit code changes (they were never critical). Motive: noise. The vibe-guard audit trial
+  of 2026-10-12 got 3,856 `observability` warnings in YunaiV/ruoyi-vue-pro. The rule itself
+  is unchanged. `--skip-rule observability` is accepted and changes nothing in a default
+  scan.
 - **New option `--skip-rule <ids>`:** comma-separated rule ids whose findings are not
   reported, in any format (text, JSON, SARIF), and do not count for the exit code.
   `--rule X --skip-rule X` and unknown ids are errors (exit 1). Skipping `reactor-block`
   reports a reactive `.block()` under `blocking`, as `--rule blocking` already does.
-  Nothing changes without the option. vibe-guard (the wrapper) will pass
-  `--skip-rule observability` by default (audit trial of 2026-10-12: 3,856 `observability`
-  warnings in YunaiV/ruoyi-vue-pro).
 
 ## 2.3.0
 

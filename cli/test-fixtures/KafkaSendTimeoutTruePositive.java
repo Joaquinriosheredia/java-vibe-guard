@@ -15,7 +15,8 @@ public class KafkaSendTimeoutTruePositive {
     }
 
     // BUG: .send(...).get() with no timeout blocks the calling thread
-    // indefinitely if the broker is slow/unavailable (Java-Production-Labs
+    // until the producer gives up (delivery.timeout.ms, 120 s by default) if
+    // the broker is slow/unavailable (Java-Production-Labs
     // SagaOrderService.java:45, commit 01cee18). Nested parens in the
     // payload (saved.getId().toString()) are the real-world shape this
     // rule's regex is built to survive.
