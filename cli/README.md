@@ -3,7 +3,7 @@
 > Static analyzer for Java/Spring Boot code that compiles, passes its tests, and fails in production under load — patterns that are common in AI-generated code.
 
 [![npm version](https://img.shields.io/npm/v/java-vibe-guard?color=blue)](https://www.npmjs.com/package/java-vibe-guard)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/LICENSE)
 [![Node.js ≥18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
 > **2.4.0:** `reactor-block` is CRITICAL only when the file shows the call can run on a Reactor thread (a Reactor operator callback, a WebFlux handler, `subscribeOn(parallel())`); otherwise it is a WARNING, because the thread is unknown. Startup hooks and `@Async` (with `@EnableAsync`) are not reported. `observability` is opt-in (`--rule observability`). New `--skip-rule <ids>`. `kafka-send-timeout` no longer says "indefinitely". No finding becomes more severe. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#240).
@@ -44,7 +44,7 @@ Requires Node.js 18+. Scanning needs nothing else; `--verify` needs more (see be
 | **kafka-send-timeout** | 🔴 CRITICAL | `.send(...).get()` with no timeout in a file that uses `KafkaTemplate` |
 | **transactions** | 🔴 CRITICAL / 🟡 MAJOR | `@Transactional` + `@Async` on the same method (CRITICAL) · `@Transactional` on a Controller method (MAJOR) |
 | **layers** | 🟡 MAJOR | A Controller using a `*Repository` or `KafkaTemplate` directly |
-| **kafka** | ⚠️ WARNING | Zookeeper in docker-compose · `@KafkaListener` without `groupId` · no `@RetryableTopic` or DLQ |
+| **kafka** | ⚠️ WARNING | Zookeeper in docker-compose · `@KafkaListener` without `groupId` · no `@RetryableTopic` or DLQ · Kafka config (`.properties`/`.yml`) without a consumer `group.id` |
 | **observability** (opt-in) | ⚠️ WARNING | Only with `--rule observability` (not in the default set since 2.4.0: too noisy). Endpoint methods with no structured logging (`log.info`, `log.warn`, …) |
 
 `java-vibe-guard --explain <rule>` prints the full description of any rule.
@@ -119,12 +119,12 @@ When a reactive `.block()` matches both `blocking` and `reactor-block` on the sa
 
 ## Example output
 
-Real output of 2.1.0 (only the `blocking` and `blocking-kafka` evidence lines differ from 2.0.0) on [java-vibe-guard-demo](https://github.com/Joaquinriosheredia/java-vibe-guard-demo):
+Real output of `npx java-vibe-guard@2.4.0 . --no-color` on [java-vibe-guard-demo](https://github.com/Joaquinriosheredia/java-vibe-guard-demo) at `cf6a1a0`:
 
 ```
 
 java-vibe-guard — vibe coding detector for Java/Spring Boot
-Scanning: .  (3 files)
+Scanning: .  (4 files)
 
 ❌ CRITICAL: Thread.sleep() detected in @KafkaListener method → src/main/java/demo/KafkaConsumerBug.java:9
   Evidence (measured, java-vibe-guard verify/blocking-kafka — @KafkaListener): the damage appears only when max.poll.records x time per record > max.poll.interval.ms (with the defaults, 500 records and 300 s: more than 600 ms per record). Above it, in an accelerated setup (max.poll.interval.ms lowered to 10 s), the consumer left the group on every batch, every offset commit failed and the group entered a reprocessing loop: 0 records/s committed, each record delivered ~10 times. Below it, the same blocking call caused no measured damage: no rebalances, no duplicates, throughput = consumers / time per record. Measured on kafka-clients 3.6.2, classic group protocol with eager rebalancing, spring-kafka AckMode BATCH; the cooperative protocol, KIP-848 and AckMode RECORD were not measured
@@ -133,19 +133,15 @@ Scanning: .  (3 files)
   Evidence (measured, java-vibe-guard verify/blocking — @Async): on Spring Boot's default @Async executor (8 platform threads, unbounded queue), a call that holds the thread caps throughput at threads / call duration: 39.9-40.0 tasks/s with 8 threads, 79.8 with 16. Above that the queue grows at (load - capacity) and 98-99.5% of latency is queue wait; the same call without holding the thread did not queue. With virtual threads enabled (spring.threads.virtual.enabled=true) the executor did not saturate
   Source: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c4e5ddd/cli/verify/blocking/results/criteria.md#L7-L38
   Evidence (@Scheduled, @EventListener): documented mechanism, no benchmark of our own — the call holds a thread of the scheduler / event pool for its whole duration; under load the pool saturates
-❌ CRITICAL: Reactive blocking call '.block()' inside Spring bean — on a Reactor thread (Netty event loop or Schedulers.parallel() worker) it throws IllegalStateException on every call (measured); compose with .flatMap()/.then() instead, or, if the call must block, run it in Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic()) (a bounded pool: capacity = threads / call duration) → src/main/java/demo/ReactiveController.java:14
-  Evidence (measured, java-vibe-guard verify/reactor-block — .block() on Schedulers.parallel()): a .block() on a Schedulers.parallel() worker (the README "Found in the Wild" Finding 2 shape: .block() inside .map() after subscribeOn(Schedulers.parallel())) does not hold the thread: Reactor throws IllegalStateException ("block()/blockFirst()/blockLast() are blocking, which is not supported in thread parallel-N") on every call, so 100% of the requests through that path failed with HTTP 500 at every load measured (10, 50 and 400 requests/s), not only under load; the workers were not held (0-0.9% of their samples inside blockingGet) and other work on them was not delayed. Measured on Spring Boot 3.2.5, reactor-core 3.6.5, reactor-netty 1.1.18
-  Source: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c934bd7/cli/verify/reactor-block/results/criteria.md#L32-L46
-  Evidence (measured, java-vibe-guard verify/reactor-block replication — .block() on the Netty event loop): a .block() on the Netty event loop (in a WebFlux handler) does not hold the event loop either: Reactor throws IllegalStateException ("block()/blockFirst()/blockLast() are blocking, which is not supported in thread reactor-http-epoll-N") on every call, so 100% of the requests through that path failed with HTTP 500 at every load measured (10, 50 and 400 requests/s); the event loops were not held (0-0.6% of their samples inside blockingGet) and other requests on them were not delayed. Measured on Spring Boot 3.2.5, reactor-core 3.6.5, reactor-netty 1.1.18 (native epoll)
-  Source: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/1052498/cli/verify/reactor-block/replication/results/criteria.md#L15-L25
-  Evidence (measured, java-vibe-guard verify/reactor-block replication — .toFuture().get() on the Netty event loop): a .toFuture().get() in a WebFlux handler, with the WebClient on the server's event loops (Spring Boot's default shared resources), deadlocked every request: in 15/15 runs (10, 50 and 400 requests/s) 0 responses succeeded and the downstream did not receive a single request - the request never left the app. When all 4 event loops were held (every run at 400 requests/s), the rest of the server stopped too. The pre-registered minimum for the same deadlock with event loops still free was met exactly at its threshold (3/15 runs with 2 of 4 loops held while requests that block nothing on new connections were still served). Measured on Spring Boot 3.2.5, reactor-core 3.6.5, reactor-netty 1.1.18 (native epoll), OpenJDK 21; a WebClient with its own LoopResources was not measured
-  Source: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/1052498/cli/verify/reactor-block/replication/results/criteria.md#L27-L48
+❌ CRITICAL: blocking .block() detected in @Async method → src/main/java/demo/ReactiveController.java:14
+  Evidence (measured, java-vibe-guard verify/blocking — @Async): on Spring Boot's default @Async executor (8 platform threads, unbounded queue), a call that holds the thread caps throughput at threads / call duration: 39.9-40.0 tasks/s with 8 threads, 79.8 with 16. Above that the queue grows at (load - capacity) and 98-99.5% of latency is queue wait; the same call without holding the thread did not queue. With virtual threads enabled (spring.threads.virtual.enabled=true) the executor did not saturate
+  Source: https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c4e5ddd/cli/verify/blocking/results/criteria.md#L7-L38
+  Evidence (@Scheduled, @EventListener): documented mechanism, no benchmark of our own — the call holds a thread of the scheduler / event pool for its whole duration; under load the pool saturates
 ⚠️  WARNING: @KafkaListener without explicit groupId → src/main/java/demo/KafkaConsumerBug.java:7
 ⚠️  WARNING: @KafkaListener without @RetryableTopic or DLQ — failed messages will be lost → src/main/java/demo/KafkaConsumerBug.java:7
-⚠️  WARNING: Endpoint without structured logging → src/main/java/demo/ReactiveController.java:11
 
 ──────────────────────────────────────────────────────────────
-📊 Summary: 3 critical · 3 warnings
+📊 Summary: 3 critical · 2 warnings
 ──────────────────────────────────────────────────────────────
 
 🚨 3 CRITICAL issue(s) found — fix before deploying to production.
@@ -155,30 +151,48 @@ Scanning: .  (3 files)
 
 Each CRITICAL finding prints the evidence behind its rule. A rule only cites evidence that measures its own mechanism:
 
-- **Measured** — `kafka-send-timeout` cites two [Java-Production-Labs](https://github.com/Joaquinriosheredia/Java-Production-Labs) fault-injection runs (Lab 05, Lab 08) in which an untimed `send().get()` blocked request threads while Kafka was down; each line links to the versioned result file, pinned to the commit of the result.
-- **Documented mechanism, no benchmark of our own** — every other rule today. The output says so instead of borrowing a figure from a benchmark that measured something else.
+- **Measured** — `blocking` (for `@Async`), `blocking-kafka`, `reactor-block` and `async-returns-pending-future` cite this repository's pre-registered experiments under `cli/verify/`; `kafka-send-timeout` cites two [Java-Production-Labs](https://github.com/Joaquinriosheredia/Java-Production-Labs) fault-injection runs (Lab 05, Lab 08) in which an untimed `send().get()` blocked request threads while Kafka was down. Each line links to the versioned result file, pinned to the commit of the result.
+- **Documented mechanism, no benchmark of our own** — every other rule, and `blocking` for `@Scheduled`/`@EventListener`. The output says so instead of borrowing a figure from a benchmark that measured something else.
 
 ---
 
 ## CLI options
 
+Output of `java-vibe-guard --help` (2.4.0):
+
 ```
 Usage: java-vibe-guard [options] [path]
 
+Static analyzer that detects vibe coding patterns in Java/Spring Boot projects
+
+Arguments:
+  path               Path to Java/Spring Boot project to analyze
+
 Options:
   -V, --version      output the version number
-  --verify <rule>    Verify a VIBE rule is reproducible in your environment (e.g. VIBE-001).
-                     Requires Docker (24+), Java 17+ and Maven on PATH
-  --explain <rule>   Print curated information about a rule id — no project scan
-  --format <format>  Output format: text (default) | json | sarif
-  --json             Alias for --format json
-  --rule <name>      Run only one rule: blocking | blocking-kafka | kafka | kafka-send-timeout |
-                     layers | observability | reactor-block | async-returns-pending-future |
-                     transactions (async-returns-pending-future and observability run only when named here)
-  --skip-rule <ids>  Comma-separated rule ids whose findings are not reported (e.g. kafka,layers)
-  --ignore <dirs>    Comma-separated directories to exclude (e.g. labs,demos,test)
-  --verbose          List suppressed findings with their rule, location and justification
-  --baseline         Write/regenerate vibeguard-baseline.json from the current scan and exit
+  --verify <rule>    Verify a VIBE rule is reproducible in your environment
+                     (e.g. VIBE-001). Requires Docker (24+), Java 17+ and Maven
+                     on PATH; runs a bundled Spring Boot app against a Postgres
+                     container (~1 min)
+  --explain <rule>   Print curated information about a rule id (e.g. kafka,
+                     blocking-kafka) — no project scan
+  --format <format>  Output format (choices: "text", "json", "sarif", default:
+                     "text")
+  --json             Output results as JSON (compatibility alias for --format
+                     json)
+  --rule <name>      Run only one rule: blocking | blocking-kafka | kafka |
+                     kafka-send-timeout | layers | observability |
+                     reactor-block | async-returns-pending-future |
+                     transactions (async-returns-pending-future and
+                     observability run only when named here)
+  --skip-rule <ids>  Comma-separated rule ids whose findings are not reported
+                     (e.g. kafka,layers)
+  --ignore <dirs>    Comma-separated directories to exclude (e.g.
+                     labs,demos,test)
+  --verbose          List suppressed findings with their rule, location,
+                     suppressedBy, and justification
+  --baseline         Write/regenerate vibeguard-baseline.json from the current
+                     scan and exit (no report, no exit code by criticals)
   --no-color         Disable colored output
   -h, --help         display help for command
 ```
@@ -219,7 +233,7 @@ Runs a bundled Spring Boot app (HikariCP pool of 5, `@Transactional` method hold
 
 > **`--verify` hangs in 2.2.0 with Maven 3.10; update to 2.2.1.** In 2.2.0, `--verify VIBE-001` can wait forever without an error on its first run (when the Postgres image is not cached yet) if the `mvn` on `PATH` is 3.10.x. 2.2.1 fixes it and stops a run that exceeds 5 minutes ([details](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/cli/verify/vibe-001/HANG-2.2.0.md)).
 
-**Requires Docker 24+, Java 17+, Maven on `PATH`** and 512 MB of free memory. The environment pre-check ([testcontainers-doctor](https://www.npmjs.com/package/testcontainers-doctor)) ships as a dependency — nothing to install globally.
+**Requires Docker 24+, Java 21+ (the bundled app compiles with `release 21`; the pre-check and `--help` still say 17), Maven on `PATH`** and 512 MB of free memory. The environment pre-check ([testcontainers-doctor](https://www.npmjs.com/package/testcontainers-doctor)) ships as a dependency — nothing to install globally.
 
 - Available today: `VIBE-001` only.
 - It reproduces a canonical scenario; it does **not** run your project's code.
@@ -252,7 +266,7 @@ Or call the CLI directly:
 |-----------|-----------|
 | At least one visible `critical` finding | `1` |
 | Only `major` / `warning` findings, or none | `0` |
-| Scan error (path not found, no Java/config files, unknown `--rule`) | `1` |
+| Scan error (path not found, no Java/config files, unknown `--rule` or `--skip-rule`, `--rule X --skip-rule X`) | `1` |
 | `--explain` / `--verify` with an unknown rule | `2` |
 
 Note that `1` covers both "critical findings" and "scan error".
@@ -263,9 +277,9 @@ Note that `1` covers both "critical findings" and "scan error".
 {
   "timestamp": "2026-10-03T03:00:00.000Z",
   "projectPath": ".",
-  "filesScanned": 3,
-  "summary": { "critical": 3, "major": 0, "warning": 3, "info": 0,
-               "reported": 6, "suppressed": 0, "total": 6 },
+  "filesScanned": 4,
+  "summary": { "critical": 3, "major": 0, "warning": 2, "info": 0,
+               "reported": 5, "suppressed": 0, "total": 5 },
   "healthy": false,                     // true when critical === 0
   "issues": [
     {
@@ -290,7 +304,7 @@ This package is one of two independent Java engines in the [java-vibe-guard](htt
 
 | Tool | Rules | Engine | Use case |
 |------|-------|--------|----------|
-| CLI (this package) / GitHub Action | 8 rule ids (above) | Regex / line-based | CI/CD, quick scans |
+| CLI (this package) / GitHub Action | 9 rule ids (above) | Regex / line-based | CI/CD, quick scans |
 | MCP server | VIBE-001…007 | Line-based (Java), no AST | Claude Code integration |
 
 The two engines use different rule ids and do not detect exactly the same things. Python: [python-vibe-guard](https://github.com/Joaquinriosheredia/python-vibe-guard).

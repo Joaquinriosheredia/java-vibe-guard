@@ -7,7 +7,7 @@ instrument and evaluator at `98ad478`, before any run). 45 runs on 2026-10-05, f
 Smoke run: `smoke/raw1`, A1, A3 and B at λ = 50, short window. It validated the harness
 only and changed nothing, so there are no deviations. Clock preflight before the batch: 2
 wall-clock steps in 60 s (−2.27 s). The stepping regime was active, which is why every
-deciding criterion uses a single clock (`AUDITORIA-RELOJ.md` in vibe-guard).
+deciding criterion uses a single clock ([`cli/verify/AUDITORIA-RELOJ.md`](../../../AUDITORIA-RELOJ.md), in Spanish).
 
 - `criteria.md` — every criterion with its figures, and the verdicts.
 - `summary.md` — per variant and λ: median [min–max] over 5 repetitions.
