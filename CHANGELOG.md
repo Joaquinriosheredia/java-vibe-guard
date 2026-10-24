@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 3.0.0
+
+npm `3.0.0`, Action `@v3.0.0` / `@v3` (`@v2` stays on 2.4.0). CLI only: the MCP server is
+unchanged. **Major, because two changes are incompatible for existing users:** the reworded
+`transactions` message changes the key of every `vibeguard-baseline.json` entry for it, and the
+fully qualified Spring `@Scheduled` now anchors `blocking`, so a scan can report new CRITICAL
+findings that a 2.x CI gate did not.
 
 False positives of test-corpus-2 (vibe-guard-evaluation `test-corpus-2/FP-ANALYSIS.md`), each
 with a regression fixture from the reviewed code (`cli/test/tc2-regressions.test.js`).
