@@ -37,12 +37,12 @@ Requires Node.js 18+. Scanning needs nothing else; `--verify` needs more (see be
 
 | Rule | Severity | Pattern |
 |------|----------|---------|
-| **blocking** | 🔴 CRITICAL | `Thread.sleep()`, `.join()`, `.block()`/`.blockFirst()`/`.blockLast()` and `Future.get()` inside `@Async` (Spring's, with `@EnableAsync` in the scanned tree), `@Scheduled` or `@EventListener` methods (see [Future.get()](#futureget) below) |
+| **blocking** | 🔴 CRITICAL | `Thread.sleep()`, `.join()`, `.block()`/`.blockFirst()`/`.blockLast()` and `Future.get()` inside `@Async` (Spring's, with `@EnableAsync` in the scanned tree), `@Scheduled` (Spring's) or `@EventListener` methods (see [Future.get()](#futureget) below). A lone synchronous `@EventListener` of a start-up event is WARNING |
 | **blocking-kafka** | 🔴 CRITICAL | The same blocking calls inside a `@KafkaListener` method |
 | **reactor-block** | 🔴 CRITICAL / ⚠️ WARNING | `.block()` / `.blockFirst()` / `.blockLast()` / `.toFuture().get()` in a `@RestController`/`@Service`/`@Component` that imports `reactor.core.publisher`. CRITICAL only when the file shows it can run on a Reactor thread (a Reactor operator callback, a WebFlux handler, a `ServerRequest`/`ServerWebExchange` method, `subscribeOn(parallel())`); otherwise WARNING: the thread is unknown. Startup hooks and `@Async` (with `@EnableAsync`) are not reported |
 | **async-returns-pending-future** (opt-in) | 🔴 CRITICAL | Only with `--rule async-returns-pending-future`. An `@Async` method returning a `CompletableFuture` that this file shows to be still pending (`supplyAsync`, `…Async` stages, `WebClient…toFuture()`, `HttpClient.sendAsync`, `KafkaTemplate.send`, …) — see [below](#async-returns-pending-future) for what it does not detect yet |
 | **kafka-send-timeout** | 🔴 CRITICAL | `.send(...).get()` with no timeout in a file that uses `KafkaTemplate` |
-| **transactions** | 🔴 CRITICAL / 🟡 MAJOR | `@Transactional` + `@Async` on the same method (CRITICAL) · `@Transactional` on a Controller method (MAJOR) |
+| **transactions** | 🔴 CRITICAL / 🟡 MAJOR | `@Transactional` + `@Async` on the same method (CRITICAL; text inside string, char and text-block literals and an `@interface` declaration are not matched) · `@Transactional` on a Controller method (MAJOR) |
 | **layers** | 🟡 MAJOR | A Controller using a `*Repository` or `KafkaTemplate` directly |
 | **kafka** | ⚠️ WARNING | Zookeeper in docker-compose · `@KafkaListener` without `groupId` · no `@RetryableTopic` or DLQ · Kafka config (`.properties`/`.yml`) without a consumer `group.id` |
 | **observability** (opt-in) | ⚠️ WARNING | Only with `--rule observability` (not in the default set since 2.4.0: too noisy). Endpoint methods with no structured logging (`log.info`, `log.warn`, …) |
@@ -77,6 +77,10 @@ Measured for **`@Async`** with a pre-registered experiment ([`verify/blocking`](
 - **WARNING** only if `spring.threads.virtual.enabled=true` (literal) appears in the base `application.properties` or `application.yml` of the module the file belongs to (the nearest `pom.xml` / `build.gradle`; the file must be under `src/main/java`), and no other config file, profile or profile document sets it to anything else.
 - **Stays CRITICAL** when the key is only in a profile (`application-prod.yml`, an `on-profile` document), set to `false`, absent, a placeholder (`${…}`), overridden by a profile, or the module cannot be determined. A flag set only by an environment variable or on the command line is not visible to a static scan, so it stays CRITICAL too.
 - `@Scheduled` and `@EventListener` (not measured), and a call under `@Async` plus one of them, stay CRITICAL. `blocking-kafka` is unchanged.
+
+**Anchors that do not hold a Spring pool** (test-corpus-2, vibe-guard-evaluation `test-corpus-2/FP-ANALYSIS.md`):
+- `@Scheduled` anchors only when it is Spring's: an import of `org.springframework.scheduling.annotation.Scheduled` (or `.*`), or the fully qualified annotation — the same test as `@Async`. Quarkus' `io.quarkus.scheduler.Scheduled` runs blocking methods on a worker pool.
+- A synchronous `@EventListener` (no `@Async`/`@Scheduled` stacked) whose event — in the annotation's arguments or the signature — is one Spring Boot publishes once at start-up (`ApplicationStartingEvent`, `ApplicationEnvironmentPreparedEvent`, `ApplicationContextInitializedEvent`, `ApplicationPreparedEvent`, `ApplicationStartedEvent`, `ApplicationReadyEvent`, `ContextRefreshedEvent`, `(Servlet|Reactive)WebServerInitializedEvent`) is **WARNING**, with the reason in the message: it blocks only the start-up thread.
 
 ### Evidence for `blocking-kafka`
 

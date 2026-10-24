@@ -9,7 +9,7 @@ import { asyncEnabledInScan } from './enable-async.js';
 const VARIANT_D_SOURCE = 'https://github.com/Joaquinriosheredia/java-vibe-guard/blob/c4e5ddd/cli/verify/blocking/results/criteria.md#L38-L38';
 
 const ASYNC_ANNOTATIONS = [
-  { re: /@Scheduled\b/,    name: '@Scheduled' },
+  { re: /@(?:org\.springframework\.scheduling\.annotation\.)?Scheduled\b/, name: '@Scheduled', springScheduled: true },
   { re: /@KafkaListener\b/, name: '@KafkaListener' },
   { re: /@(?:org\.springframework\.scheduling\.annotation\.)?Async\b/, name: '@Async', spring: true },
   { re: /@EventListener\b/, name: '@EventListener' },
@@ -21,6 +21,15 @@ const ASYNC_ANNOTATIONS = [
 // (eugenp/tutorials libraries-6 JcabiAspectJ.java) runs on its own executor.
 const SPRING_ASYNC_IMPORT_RE = /^\s*import\s+org\.springframework\.scheduling\.annotation\.(?:Async|\*)\s*;/;
 const SPRING_ASYNC_QUALIFIED_RE = /@org\.springframework\.scheduling\.annotation\.Async\b/;
+// @Scheduled counts only when it is Spring's too, by the same import/qualified test.
+// Quarkus' io.quarkus.scheduler.Scheduled runs blocking methods on a worker pool and does
+// not hold Spring's scheduler thread (test-corpus-2 FP-ANALYSIS.md: J015-J018, quarkusio).
+const SPRING_SCHEDULED_IMPORT_RE = /^\s*import\s+org\.springframework\.scheduling\.annotation\.(?:Scheduled|\*)\s*;/;
+const SPRING_SCHEDULED_QUALIFIED_RE = /@org\.springframework\.scheduling\.annotation\.Scheduled\b/;
+// A synchronous @EventListener of an event Spring Boot publishes once at start-up blocks
+// only the start-up thread (test-corpus-2 J053: ApplicationStartedEvent): WARNING, with
+// the reason in the message. Recognised in the annotation's arguments or the signature.
+const STARTUP_EVENT_RE = /\b(ApplicationStartingEvent|ApplicationEnvironmentPreparedEvent|ApplicationContextInitializedEvent|ApplicationPreparedEvent|ApplicationStartedEvent|ApplicationReadyEvent|ContextRefreshedEvent|(?:Servlet|Reactive)?WebServerInitializedEvent)\b/;
 // And only when the scanned tree has @EnableAsync (enable-async.js): without it @Async
 // runs inline on the caller's thread, not on the measured executor (2026-10-12, after the
 // b0-corpus audit). @Scheduled, @EventListener and @KafkaListener are unaffected.
@@ -90,16 +99,19 @@ export function checkBlocking(fileContexts) {
     // Collect positions of async annotations
     const annotatedPositions = [];
     const springAsyncImported = lines.some(line => SPRING_ASYNC_IMPORT_RE.test(stripComments(line)));
+    const springScheduledImported = lines.some(line => SPRING_SCHEDULED_IMPORT_RE.test(stripComments(line)));
     for (let i = 0; i < lines.length; i++) {
       // Issue #9: strip comments before the anchor test — a comment merely
       // mentioning "@Scheduled"/"@KafkaListener"/etc. (e.g. explaining what a
       // fixture does NOT contain) must not open a detection window.
       const code = stripComments(lines[i]);
-      for (const { re, name, spring } of ASYNC_ANNOTATIONS) {
+      for (const { re, name, spring, springScheduled } of ASYNC_ANNOTATIONS) {
         if (re.test(code)) {
           if (spring && !springAsyncImported && !SPRING_ASYNC_QUALIFIED_RE.test(code)) continue;
           if (spring && !(asyncEnabled ??= asyncEnabledInScan(fileContexts))) continue;
-          annotatedPositions.push({ lineIdx: i, annotationName: name });
+          if (springScheduled && !springScheduledImported && !SPRING_SCHEDULED_QUALIFIED_RE.test(code)) continue;
+          const startupEvent = name === '@EventListener' ? startupEventOf(lines, i) : null;
+          annotatedPositions.push({ lineIdx: i, annotationName: name, startupEvent });
           break;
         }
       }
@@ -108,7 +120,7 @@ export function checkBlocking(fileContexts) {
 
     const patterns = [...BLOCKING_PATTERNS, ...futureGetPatterns(lines)];
 
-    for (const { lineIdx, annotationName } of annotatedPositions) {
+    for (const { lineIdx, annotationName, startupEvent } of annotatedPositions) {
       // A3.2 (issue #11): the fixed 60-line window used to scan past the
       // annotated method's real closing brace into whatever came next,
       // misattributing a blocking call in a later, unannotated method to
@@ -134,6 +146,7 @@ export function checkBlocking(fileContexts) {
               rule: annotationName === '@KafkaListener' ? 'blocking-kafka' : 'blocking',
               call: name,
               annotationName,
+              startupEvent,
               location: `${relativePath}:${i + 1}`,
               filePath,
             });
@@ -144,6 +157,18 @@ export function checkBlocking(fileContexts) {
   }
 
   return mergeByCall(findings);
+}
+
+// The start-up event an @EventListener at lines[idx] listens to, from the annotation's
+// arguments or the method signature (up to its opening brace), or null.
+function startupEventOf(lines, idx) {
+  const header = [];
+  for (let k = idx; k < lines.length && k - idx < 10; k++) {
+    const code = stripComments(lines[k]);
+    header.push(code);
+    if (code.includes('{')) break;
+  }
+  return STARTUP_EVENT_RE.exec(header.join(' '))?.[1] ?? null;
 }
 
 // One finding per (location, rule, call). A method with several anchors
@@ -165,15 +190,27 @@ function mergeByCall(rawFindings) {
     const key = `${f.location}|${f.rule}|${f.call}`;
     const entry = merged.get(key);
     if (!entry) {
-      merged.set(key, { ...f, annotations: [f.annotationName] });
+      merged.set(key, { ...f, annotations: [f.annotationName], startupEvents: [f.startupEvent] });
     } else if (!entry.annotations.includes(f.annotationName)) {
       entry.annotations.push(f.annotationName);
+      entry.startupEvents.push(f.startupEvent);
     }
   }
-  return [...merged.values()].map(({ rule, call, annotations, location, filePath }) => {
+  return [...merged.values()].map(({ rule, call, annotations, startupEvents, location, filePath }) => {
     const message = annotations.length === 1
       ? `${call} detected in ${annotations[0]} method`
       : `${call} detected in method annotated ${annotations.join(', ')}`;
+    // Only a lone synchronous @EventListener: with @Async or @Scheduled stacked, the call
+    // also runs on that pool.
+    if (annotations.length === 1 && annotations[0] === '@EventListener' && startupEvents[0]) {
+      return {
+        severity: 'warning',
+        rule,
+        message: `${message} — WARNING, not CRITICAL: a synchronous listener of ${startupEvents[0]}, `
+          + 'which Spring Boot publishes once at start-up, so it blocks only the start-up thread',
+        location,
+      };
+    }
     const vt = rule === 'blocking' && annotations.length === 1 && annotations[0] === '@Async'
       ? virtualThreadsEnabled(filePath)
       : { enabled: false };

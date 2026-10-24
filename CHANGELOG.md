@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+False positives of test-corpus-2 (vibe-guard-evaluation `test-corpus-2/FP-ANALYSIS.md`), each
+with a regression fixture from the reviewed code (`cli/test/tc2-regressions.test.js`).
+Declared in `test-corpus-3/PREREGISTRATION.md` before these changes. No existing finding becomes
+more severe.
+
+- **`transactions`:** `@Transactional`/`@Async` inside string, char and text-block literals
+  are no longer matched. 12 FPs: ArchUnit rule descriptions in `jdubois/boot-ui`, and an enum
+  description in `spring-projects/spring-tools`. An `@interface` declaration (a composed
+  annotation such as Spring Modulith's `@ApplicationModuleListener`) is not reported (1 FP).
+- **`transactions` message reworded** (overstated in 48 of 48 reviews): "@Transactional +
+  @Async on the same method — it runs in its own new transaction on the async executor
+  thread, never in the caller's: a caller rollback does not undo it, and it cannot see the
+  caller's uncommitted changes". **A baseline entry keyed on the old message no longer
+  matches.**
+- **`blocking`: `@Scheduled` anchors only when it is Spring's** (import or fully qualified),
+  as `@Async` already did. Quarkus' `@Scheduled` runs blocking methods on a worker pool. 3 FPs,
+  plus J015, which Joaquín's verdict counted as a TP (`FP-ANALYSIS.md` §3). **New findings
+  possible:** the fully qualified `@org.springframework.scheduling.annotation.Scheduled` used
+  not to match at all and now anchors like the imported one.
+- **`blocking`: a lone synchronous `@EventListener` of a start-up event is WARNING**, with the
+  reason in the message (1 FP: `ApplicationStartedEvent`). The fixture
+  `reactor-block-context/.../StartupEventListener.java` moves from 2 CRITICAL to 2 WARNING.
+
 ## 2.4.0
 
 npm `2.4.0`, Action `@v2.4.0` / `@v2`. CLI only: the MCP server is unchanged, and its

@@ -2,26 +2,64 @@ import { stripComments } from './strip-comments.js';
 
 const CONTROLLER_RES = [/@RestController\b/, /@Controller\b/];
 
-// Second matching site fixed after issue #9, not by it — see the block
-// comment above stripCommentsPreservingLines() below for the full history
-// and why a plain per-line stripComments() call (the pattern #9 used for
-// blocking.js's/kafka.js's annotation anchors) is not enough here.
-function stripCommentsPreservingLines(text) {
-  return text
-    // Same block-comment regex as the shared stripComments(), except the
-    // matched span is blanked character-by-character instead of deleted
-    // outright — every '\n' inside a multi-line /* ... */ comment is kept,
-    // so re-splitting the result on '\n' still lines up 1:1 with the
-    // original `lines` array. stripComments() itself cannot be reused for
-    // this: it deletes a matched span's newlines along with its text, which
-    // is harmless for its existing callers (they only ever run a single
-    // boolean regex test over the result, e.g. this file's own isController
-    // gate below, or kafka.js's per-line/window checks) but would silently
-    // shift every subsequent line's index — and therefore this rule's
-    // reported location:${i+1} — once a multi-line comment appeared earlier
-    // in the file.
-    .replace(/\/\*[\s\S]*?\*\//g, span => span.replace(/[^\n]/g, ''))
-    .replace(/\/\/.*$/gm, '');
+// Second matching site fixed after issue #9, not by it: the per-line @Transactional trigger
+// below reads a masked copy of the file whose lines line up 1:1 with `lines` (a multi-line
+// /* ... */ must not shift the reported location). Until test-corpus-2 that copy blanked
+// only comments (stripCommentsPreservingLines); maskCommentsAndLiterals() below also
+// blanks string, char and text-block literals.
+
+// test-corpus-2 (FP-ANALYSIS.md, J003-J013, J055): `@Transactional`/`@Async` matched inside
+// string literals — ArchUnit rule descriptions and violation messages, an enum description.
+// One pass over the file that blanks comments AND string, char and text-block literals,
+// keeping every '\n' so lines still line up 1:1 with `lines`. A single scanner, because the
+// two interact: a `//` inside a string is not a comment, and a quote inside a comment does
+// not open a string.
+export function maskCommentsAndLiterals(text) {
+  let out = '';
+  let i = 0;
+  const blank = (span) => span.replace(/[^\n]/g, ' ');
+  while (i < text.length) {
+    const c = text[i];
+    const next = text[i + 1];
+    let end = -1;
+    if (c === '/' && next === '/') {
+      end = text.indexOf('\n', i);
+      if (end === -1) end = text.length;
+    } else if (c === '/' && next === '*') {
+      end = text.indexOf('*/', i + 2);
+      end = end === -1 ? text.length : end + 2;
+    } else if (c === '"' && text.startsWith('"""', i)) {
+      end = text.indexOf('"""', i + 3);
+      end = end === -1 ? text.length : end + 3;
+    } else if (c === '"' || c === "'") {
+      end = i + 1;
+      while (end < text.length && text[end] !== c && text[end] !== '\n') end += text[end] === '\\' ? 2 : 1;
+      end = Math.min(end + 1, text.length);
+    }
+    if (end === -1) {
+      out += c;
+      i++;
+    } else {
+      out += blank(text.slice(i, end));
+      i = end;
+    }
+  }
+  return out;
+}
+
+// test-corpus-2 (J054): @Async + @Transactional on an `@interface` declare a composed
+// annotation (Spring Modulith's @ApplicationModuleListener), not a proxied method. The
+// declaration that follows the annotation at masked[i] is read up to its `{` or `;`, with
+// the annotations' own argument lists blanked (`@Target({ ... })` has braces).
+function annotatesAnnotationType(masked, i) {
+  let chunk = masked.slice(i, i + 15).join('\n');
+  let prev;
+  do {
+    prev = chunk;
+    chunk = chunk.replace(/\([^()]*\)/g, m => ' '.repeat(m.length));
+  } while (chunk !== prev);
+  const decl = chunk.split(/[{;]/)[0];
+  return /@\s*interface\b/.test(decl);
 }
 
 export function checkTransactions(fileContexts) {
@@ -57,7 +95,7 @@ export function checkTransactions(fileContexts) {
     // `git log -p -- cli/src/rules/transactions.js` shows this loop's
     // `if (!/@Transactional\b/.test(line))` line unchanged since the file's
     // original commit, d79bd46 (2026-05-24).
-    const strippedLines = stripCommentsPreservingLines(lines.join('\n')).split('\n');
+    const strippedLines = maskCommentsAndLiterals(lines.join('\n')).split('\n');
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -76,13 +114,17 @@ export function checkTransactions(fileContexts) {
       }
 
       // @Transactional + @Async in the same method boundary (propagation breaks)
-      const ctx = lines.slice(Math.max(0, i - 3), Math.min(i + 5, lines.length)).join('\n');
-      const ctxNoComments = stripComments(ctx);
-      if (/@Async\b/.test(ctxNoComments)) {
+      const ctx = strippedLines.slice(Math.max(0, i - 3), Math.min(i + 5, lines.length)).join('\n');
+      if (/@Async\b/.test(ctx) && !annotatesAnnotationType(strippedLines, i)) {
         findings.push({
           severity: 'critical',
           rule: 'transactions',
-          message: '@Transactional + @Async — transaction will NOT propagate to async thread',
+          // test-corpus-2: the old text ("transaction will NOT propagate to async thread")
+          // was overstated in 48 of 48 reviews — the method's own transaction does run on
+          // the async thread; what it never joins is the caller's.
+          message: '@Transactional + @Async on the same method — it runs in its own new transaction on the async '
+            + "executor thread, never in the caller's: a caller rollback does not undo it, and it cannot see the "
+            + "caller's uncommitted changes",
           location: `${relativePath}:${i + 1}`,
         });
       }
