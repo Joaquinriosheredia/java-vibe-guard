@@ -6,6 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/LICENSE)
 [![Node.js ≥18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
+> **3.0.0 (major):** fixes of the test-corpus-2 false positives. `transactions` no longer matches text inside string, char or text-block literals, nor an `@interface`, and its message is reworded (**a baseline entry for it no longer matches**). `blocking`: `@Scheduled` anchors only when it is Spring's, now also when fully qualified (**new findings possible**), and a lone synchronous `@EventListener` of a start-up event is WARNING. Action: `@v3`. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#300).
+>
 > **2.4.0:** `reactor-block` is CRITICAL only when the file shows the call can run on a Reactor thread (a Reactor operator callback, a WebFlux handler, `subscribeOn(parallel())`); otherwise it is a WARNING, because the thread is unknown. Startup hooks and `@Async` (with `@EnableAsync`) are not reported. `observability` is opt-in (`--rule observability`). New `--skip-rule <ids>`. `kafka-send-timeout` no longer says "indefinitely". No finding becomes more severe. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#240).
 >
 > **2.3.0:** new rule `async-returns-pending-future`, **opt-in** (only with `--rule async-returns-pending-future`; not in the default set): its precision is not conclusively measured. `@Async` now counts, in `blocking` and in the new rule, only when the scanned tree has `@EnableAsync` (or `<task:annotation-driven/>`): without it `@Async` does nothing. Fewer findings only. See the [CHANGELOG](https://github.com/Joaquinriosheredia/java-vibe-guard/blob/master/CHANGELOG.md#230).
@@ -250,7 +252,7 @@ Runs a bundled Spring Boot app (HikariCP pool of 5, `@Transactional` method hold
 GitHub Action (recommended — JSON artifact, step summary, optional SARIF upload):
 
 ```yaml
-- uses: Joaquinriosheredia/java-vibe-guard@v2
+- uses: Joaquinriosheredia/java-vibe-guard@v3
   with:
     path: '.'
     fail-on: 'critical'   # critical | never

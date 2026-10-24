@@ -30,13 +30,13 @@ Requires Docker 24+, Java 21+ (the bundled app compiles with `release 21`), Mave
 
 ### GitHub Actions (CI)
 ```yaml
-- uses: Joaquinriosheredia/java-vibe-guard@v2
+- uses: Joaquinriosheredia/java-vibe-guard@v3
   with:
     path: '.'
     fail-on: 'critical'
 ```
 
-Fails the build on CRITICAL findings. Zero configuration required. `@v2` adds two default CRITICAL rules over `@v1` — see [CHANGELOG](CHANGELOG.md#200).
+Fails the build on CRITICAL findings. Zero configuration required. `@v3` (3.0.0) changes the `transactions` message, which is a baseline key, and can report new `blocking` findings for a fully qualified Spring `@Scheduled`; `@v2` stays on 2.4.0 — see [CHANGELOG](CHANGELOG.md#300). `@v2` added two default CRITICAL rules over `@v1` — see [CHANGELOG](CHANGELOG.md#200).
 
 ### MCP Server (Claude Code)
 1. Download `java-vibe-guard-mcp-2.0.0.jar` from the [v2.0.0 release](https://github.com/Joaquinriosheredia/java-vibe-guard/releases/tag/v2.0.0) (verify with `sha256sum -c java-vibe-guard-mcp-2.0.0.jar.sha256`)
@@ -194,7 +194,7 @@ Add to any Java project's workflow — no installation required:
 
 ```yaml
 - name: java-vibe-guard
-  uses: Joaquinriosheredia/java-vibe-guard@v2
+  uses: Joaquinriosheredia/java-vibe-guard@v3
   with:
     path: '.'            # directory to scan (default: .)
     fail-on: 'critical'  # fail step on CRITICAL findings (default)
@@ -204,7 +204,7 @@ Full options:
 
 ```yaml
 - id: guard
-  uses: Joaquinriosheredia/java-vibe-guard@v2
+  uses: Joaquinriosheredia/java-vibe-guard@v3
   with:
     path: '.'
     rule: ''             # blank = default set (async-returns-pending-future and observability are opt-in: name them here); or: blocking | blocking-kafka | kafka | kafka-send-timeout | layers | transactions | observability | reactor-block | async-returns-pending-future
@@ -305,9 +305,10 @@ What makes it solid is not the sophistication of any individual layer, but that 
   - [`eugenp/tutorials`](https://github.com/eugenp/tutorials) @ `ccab8a7` — 29,141 files scanned
   - [`spring-projects/spring-petclinic`](https://github.com/spring-projects/spring-petclinic) @ `88e37c1` — 77 files scanned
   - **29,218 files scanned in total.**
-- CLI version `2.0.0` (run 2026-10-03), **not re-run since**: from 2.1.0 to 2.4.0 the default
-  rules changed (for example `observability` left the default set and `reactor-block` became
-  WARNING when the thread is unknown), so 2.4.0 would report different numbers. Both repository validations
+- CLI version `2.0.0` (run 2026-10-03), **not re-run since**: from 2.1.0 to 3.0.0 the default
+  rules changed (for example `observability` left the default set, `reactor-block` became
+  WARNING when the thread is unknown, and `transactions` ignores string literals), so 3.0.0
+  would report different numbers. Both repository validations
   completed successfully: **2,856 findings** reported — 20 critical,
   220 major, 2,616 warning (`eugenp/tutorials`: 20 / 211 / 2,598;
   `spring-petclinic`: 0 / 9 / 18). Source:
@@ -317,7 +318,14 @@ What makes it solid is not the sophistication of any individual layer, but that 
   pinned commits with identical JSON artifacts (except the fields excluded by
   docs/validation-contract.md §5). The second run's artifacts are not versioned.
 - These are findings reported, not confirmed bugs: no precision audit has
-  been run on them. The previous run (CLI 1.0.3, 2,909 findings) is
+  been run on them.
+- **Pre-registered precision measurement: test-corpus-2** (2.4.0, 75 Spring Boot repositories,
+  every one of the 58 CRITICAL reviewed). Precision **0.6724** (Wilson 95 % 0.5442–0.7792),
+  below the 90 % target: **criterion 1 NOT MET**. FP/1000 = 0.18, so criterion 2 was met.
+  The author's audit of the AI review also declared that review NOT RELIABLE. Source:
+  [vibe-guard-evaluation `test-corpus-2/METRICS.md`](https://github.com/Joaquinriosheredia/vibe-guard-evaluation/blob/65f57e4/test-corpus-2/METRICS.md).
+  3.0.0 was fixed against those findings, so test-corpus-2 does not measure 3.0.0. That is
+  test-corpus-3, pre-registered before the fixes. The previous run (CLI 1.0.3, 2,909 findings) is
   replaced; the rule set changed in 2.0.0.
 
 ## Found in the Wild
