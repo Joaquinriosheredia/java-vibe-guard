@@ -97,7 +97,10 @@ export const FIXTURE_LEDGER = {
   'reactor-block-context/webflux/src/main/java/demo/StartupLifecycle.java':     { 'reactor-block': { warning: 1 } },
   'reactor-block-context/webflux/src/main/java/demo/StartupReadyListener.java': { 'reactor-block': { warning: 1 } },
   'reactor-block-context/webflux/src/main/java/demo/AsyncWorker.java':          { blocking: { critical: 1 } },
-  'reactor-block-context/webflux/src/main/java/demo/StartupEventListener.java': { blocking: { critical: 2 } },
+  // test-corpus-2 (FP-ANALYSIS.md, J053): a lone synchronous @EventListener of a start-up
+  // event (here ApplicationReadyEvent, in the annotation and as the parameter) blocks only
+  // the start-up thread -> blocking WARNING with the reason. Was { blocking: { critical: 2 } }.
+  'reactor-block-context/webflux/src/main/java/demo/StartupEventListener.java': { blocking: { warning: 2 } },
   // 0 from async-returns-pending-future (opt-in, see OPT_IN_LEDGER); the join() of n15 is a
   // true positive of blocking.
   'async-pending-future/base/src/main/java/demo/NotMarkedShapes.java':       { blocking: { critical: 1 } },
