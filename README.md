@@ -1,5 +1,7 @@
 # java-vibe-guard — Anti-Vibe-Coding Defense Stack
 
+> **Community edition, frozen at 3.0.0: no new features.**
+
 [![GitHub Action](https://img.shields.io/badge/GitHub_Action-available-blue?logo=github-actions)](https://github.com/Joaquinriosheredia/java-vibe-guard/actions)
 
 💬 [Feedback, false positives & rule requests](https://github.com/Joaquinriosheredia/java-vibe-guard/discussions)
